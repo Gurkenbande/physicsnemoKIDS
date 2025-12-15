@@ -1,0 +1,87 @@
+{
+  "task": "msrresnet_gan_gcn_hrrr",
+  "model": "gan",
+  "gpu_ids": [0],
+
+  "scale": 8,
+  "n_channels": 4,
+  "sigma": [0, 0],
+  "sigma_test": 0,
+
+  "path": {
+    "root": "../res/hrrr_mini",
+    "pretrained_netG": null,
+    "pretrained_netD": null,
+    "pretrained_netE": null
+  },
+
+  "datasets": {
+  "train": {
+    "name": "hrrr_mini_train",
+    "dataset_type": "hrrr_nc",
+    "dataroot_H": "../../../Data/hrrr_mini/hrrr_mini_train.nc",
+    "dataroot_L": "../../../Data/hrrr_mini/hrrr_mini_train.nc",
+    "dataloader_shuffle": true,
+    "dataloader_num_workers": 0,
+    "dataloader_batch_size": 1,
+    "nc_engine": "h5netcdf",
+    "nc_group_in": "input",
+    "nc_group_out": "output"
+  },
+  "test": {
+    "name": "hrrr_mini_val",
+    "dataset_type": "hrrr_nc",
+    "dataroot_H": "../../../Data/hrrr_mini/hrrr_mini_train.nc",
+    "dataroot_L": "../../../Data/hrrr_mini/hrrr_mini_train.nc",
+    "dataloader_shuffle": false,
+    "dataloader_num_workers": 0,
+    "dataloader_batch_size": 1,
+    "nc_engine": "h5netcdf",
+    "nc_group_in": "input",
+    "nc_group_out": "output"
+  }
+},
+
+
+
+  "netG": {
+  "net_type": "msrresnet0_mask",
+  "in_nc": 26,
+  "out_nc": 4,
+  "nc": 64,
+  "nb": 16,
+  "scale": 8
+},
+"netD": {
+  "net_type": "discriminator_vgg_64",
+  "in_nc": 4,
+  "nc": 64
+},
+
+
+  "train": {
+    "manual_seed": 1234,
+    "G_optimizer_lr": 1e-4,
+    "D_optimizer_lr": 1e-4,
+    "G_scheduler_milestones": [50000, 100000],
+    "G_scheduler_gamma": 0.5,
+    "D_scheduler_milestones": [50000, 100000],
+    "D_scheduler_gamma": 0.5,
+    "G_lossfn_type": "l1",
+    "G_lossfn_weight": 1.0,
+    "F_lossfn_weight": 0.0,
+    "M_lossfn_weight": 0.0,
+    "global_lossfn_weight": 0.0,
+    "gan_type": "gan",
+    "D_lossfn_weight": 1.0,
+    "D_update_ratio": 1,
+    "D_init_iters": 0,
+    "checkpoint_print": 100,
+    "checkpoint_save": 1000,
+    "checkpoint_test": 2000
+  },
+
+  "dist": false,
+  "rank": 0,
+  "world_size": 1
+}
