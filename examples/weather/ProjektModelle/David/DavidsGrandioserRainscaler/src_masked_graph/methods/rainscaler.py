@@ -1,6 +1,6 @@
 import os.path
 import sys
-sys.path.insert(0, '../deep_learning')
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "deep_learning")))
 import math
 import argparse
 import random
@@ -9,6 +9,7 @@ import logging
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import torch
+import os, sys
 
 from utils import utils_logger
 from utils import utils_image as util

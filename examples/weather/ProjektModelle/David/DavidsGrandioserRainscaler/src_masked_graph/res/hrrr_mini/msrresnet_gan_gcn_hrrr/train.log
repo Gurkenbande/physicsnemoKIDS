@@ -1,0 +1,363 @@
+25-12-10 15:41:08.954 :   task: msrresnet_gan_gcn_hrrr
+  model: gan
+  gpu_ids: [0]
+  scale: 8
+  n_channels: 4
+  sigma: [0, 0]
+  sigma_test: 0
+  path:[
+    root: ../res/hrrr_mini
+    pretrained_netG: None
+    pretrained_netD: None
+    pretrained_netE: None
+    task: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr
+    log: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr
+    tensorboard: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\logs
+    options: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\options
+    models: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\models
+    images: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\images
+    pretrained_optimizerG: None
+    pretrained_optimizerD: None
+  ]
+  datasets:[
+    train:[
+      name: hrrr_mini_train
+      dataset_type: hrrr_nc
+      dataroot_H: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      dataroot_L: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      H_size: 64
+      dataloader_shuffle: True
+      dataloader_num_workers: 0
+      dataloader_batch_size: 1
+      nc_engine: h5netcdf
+      nc_group_in: input
+      nc_group_out: output
+      phase: train
+      scale: 8
+      n_channels: 4
+    ]
+    test:[
+      name: hrrr_mini_val
+      dataset_type: hrrr_nc
+      dataroot_H: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      dataroot_L: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      H_size: 64
+      nc_engine: h5netcdf
+      nc_group_in: input
+      nc_group_out: output
+      phase: test
+      scale: 8
+      n_channels: 4
+    ]
+  ]
+  netG:[
+    net_type: msrresnet0_mask
+    in_nc: 26
+    out_nc: 4
+    nc: 64
+    nb: 16
+    scale: 8
+  ]
+  netD:[
+    net_type: discriminator_vgg_128
+    in_nc: 4
+    nc: 64
+    base_nc: 64
+    n_layers: 3
+    norm_type: spectral
+  ]
+  train:[
+    manual_seed: 1234
+    G_optimizer_lr: 0.0001
+    D_optimizer_lr: 0.0001
+    G_scheduler_milestones: [50000, 100000]
+    G_scheduler_gamma: 0.5
+    D_scheduler_milestones: [50000, 100000]
+    D_scheduler_gamma: 0.5
+    G_lossfn_type: l1
+    G_lossfn_weight: 1.0
+    F_lossfn_weight: 0.0
+    M_lossfn_weight: 1.0
+    global_lossfn_weight: 0.0
+    gan_type: gan
+    D_lossfn_weight: 1.0
+    D_update_ratio: 1
+    D_init_iters: 0
+    checkpoint_print: 100
+    checkpoint_save: 1000
+    checkpoint_test: 2000
+    F_feature_layer: 34
+    F_weights: 1.0
+    F_lossfn_type: l1
+    F_use_input_norm: True
+    F_use_range_norm: False
+    G_optimizer_type: adam
+    G_optimizer_betas: [0.9, 0.999]
+    G_scheduler_restart_weights: 1
+    G_optimizer_wd: 0
+    G_optimizer_reuse: False
+    D_optimizer_reuse: False
+    M_optimizer_type: adam
+    M_optimizer_betas: [0.9, 0.999]
+    M_scheduler_restart_weights: 1
+    M_optimizer_wd: 0
+    M_optimizer_reuse: False
+    G_param_strict: True
+    D_param_strict: True
+    E_param_strict: True
+    E_decay: 0
+  ]
+  dist: False
+  rank: 0
+  world_size: 1
+  opt_path: ../deep_learning/options/hrrr_mini_config.json
+  is_train: True
+  merge_bn: False
+  merge_bn_startpoint: -1
+  find_unused_parameters: True
+  use_static_graph: False
+  num_gpu: 1
+
+25-12-10 15:41:10.945 : Number of train images: 100,000, iters: 100,000
+25-12-11 10:33:09.689 :   task: msrresnet_gan_gcn_hrrr
+  model: gan
+  gpu_ids: [0]
+  scale: 8
+  n_channels: 4
+  sigma: [0, 0]
+  sigma_test: 0
+  path:[
+    root: ../res/hrrr_mini
+    pretrained_netG: None
+    pretrained_netD: None
+    pretrained_netE: None
+    task: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr
+    log: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr
+    tensorboard: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\logs
+    options: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\options
+    models: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\models
+    images: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\images
+    pretrained_optimizerG: None
+    pretrained_optimizerD: None
+  ]
+  datasets:[
+    train:[
+      name: hrrr_mini_train
+      dataset_type: hrrr_nc
+      dataroot_H: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      dataroot_L: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      H_size: 64
+      dataloader_shuffle: True
+      dataloader_num_workers: 0
+      dataloader_batch_size: 1
+      nc_engine: h5netcdf
+      nc_group_in: input
+      nc_group_out: output
+      phase: train
+      scale: 8
+      n_channels: 4
+    ]
+    test:[
+      name: hrrr_mini_val
+      dataset_type: hrrr_nc
+      dataroot_H: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      dataroot_L: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      H_size: 64
+      nc_engine: h5netcdf
+      nc_group_in: input
+      nc_group_out: output
+      phase: test
+      scale: 8
+      n_channels: 4
+    ]
+  ]
+  netG:[
+    net_type: msrresnet0_mask
+    in_nc: 26
+    out_nc: 4
+    nc: 64
+    nb: 16
+    scale: 8
+  ]
+  netD:[
+    net_type: discriminator_vgg_128
+    in_nc: 4
+    nc: 64
+    base_nc: 64
+    n_layers: 3
+    norm_type: spectral
+  ]
+  train:[
+    manual_seed: 1234
+    G_optimizer_lr: 0.0001
+    D_optimizer_lr: 0.0001
+    G_scheduler_milestones: [50000, 100000]
+    G_scheduler_gamma: 0.5
+    D_scheduler_milestones: [50000, 100000]
+    D_scheduler_gamma: 0.5
+    G_lossfn_type: l1
+    G_lossfn_weight: 1.0
+    F_lossfn_weight: 0.0
+    M_lossfn_weight: 1.0
+    global_lossfn_weight: 0.0
+    gan_type: gan
+    D_lossfn_weight: 1.0
+    D_update_ratio: 1
+    D_init_iters: 0
+    checkpoint_print: 100
+    checkpoint_save: 1000
+    checkpoint_test: 2000
+    F_feature_layer: 34
+    F_weights: 1.0
+    F_lossfn_type: l1
+    F_use_input_norm: True
+    F_use_range_norm: False
+    G_optimizer_type: adam
+    G_optimizer_betas: [0.9, 0.999]
+    G_scheduler_restart_weights: 1
+    G_optimizer_wd: 0
+    G_optimizer_reuse: False
+    D_optimizer_reuse: False
+    M_optimizer_type: adam
+    M_optimizer_betas: [0.9, 0.999]
+    M_scheduler_restart_weights: 1
+    M_optimizer_wd: 0
+    M_optimizer_reuse: False
+    G_param_strict: True
+    D_param_strict: True
+    E_param_strict: True
+    E_decay: 0
+  ]
+  dist: False
+  rank: 0
+  world_size: 1
+  opt_path: ../deep_learning/options/hrrr_mini_config.json
+  is_train: True
+  merge_bn: False
+  merge_bn_startpoint: -1
+  find_unused_parameters: True
+  use_static_graph: False
+  num_gpu: 1
+
+25-12-11 10:33:10.893 : Number of train images: 100,000, iters: 100,000
+25-12-11 10:36:47.895 :   task: msrresnet_gan_gcn_hrrr
+  model: gan
+  gpu_ids: [0]
+  scale: 8
+  n_channels: 4
+  sigma: [0, 0]
+  sigma_test: 0
+  path:[
+    root: ../res/hrrr_mini
+    pretrained_netG: None
+    pretrained_netD: None
+    pretrained_netE: None
+    task: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr
+    log: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr
+    tensorboard: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\logs
+    options: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\options
+    models: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\models
+    images: ../res/hrrr_mini\msrresnet_gan_gcn_hrrr\images
+    pretrained_optimizerG: None
+    pretrained_optimizerD: None
+  ]
+  datasets:[
+    train:[
+      name: hrrr_mini_train
+      dataset_type: hrrr_nc
+      dataroot_H: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      dataroot_L: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      H_size: 64
+      dataloader_shuffle: True
+      dataloader_num_workers: 0
+      dataloader_batch_size: 1
+      nc_engine: h5netcdf
+      nc_group_in: input
+      nc_group_out: output
+      phase: train
+      scale: 8
+      n_channels: 4
+    ]
+    test:[
+      name: hrrr_mini_val
+      dataset_type: hrrr_nc
+      dataroot_H: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      dataroot_L: ../../../Data/hrrr_mini/hrrr_mini_train.nc
+      H_size: 64
+      nc_engine: h5netcdf
+      nc_group_in: input
+      nc_group_out: output
+      phase: test
+      scale: 8
+      n_channels: 4
+    ]
+  ]
+  netG:[
+    net_type: msrresnet0_mask
+    in_nc: 26
+    out_nc: 4
+    nc: 64
+    nb: 16
+    scale: 8
+  ]
+  netD:[
+    net_type: discriminator_vgg_128
+    in_nc: 4
+    nc: 64
+    base_nc: 64
+    n_layers: 3
+    norm_type: spectral
+  ]
+  train:[
+    manual_seed: 1234
+    G_optimizer_lr: 0.0001
+    D_optimizer_lr: 0.0001
+    G_scheduler_milestones: [50000, 100000]
+    G_scheduler_gamma: 0.5
+    D_scheduler_milestones: [50000, 100000]
+    D_scheduler_gamma: 0.5
+    G_lossfn_type: l1
+    G_lossfn_weight: 1.0
+    F_lossfn_weight: 0.0
+    M_lossfn_weight: 1.0
+    global_lossfn_weight: 0.0
+    gan_type: gan
+    D_lossfn_weight: 1.0
+    D_update_ratio: 1
+    D_init_iters: 0
+    checkpoint_print: 100
+    checkpoint_save: 1000
+    checkpoint_test: 2000
+    F_feature_layer: 34
+    F_weights: 1.0
+    F_lossfn_type: l1
+    F_use_input_norm: True
+    F_use_range_norm: False
+    G_optimizer_type: adam
+    G_optimizer_betas: [0.9, 0.999]
+    G_scheduler_restart_weights: 1
+    G_optimizer_wd: 0
+    G_optimizer_reuse: False
+    D_optimizer_reuse: False
+    M_optimizer_type: adam
+    M_optimizer_betas: [0.9, 0.999]
+    M_scheduler_restart_weights: 1
+    M_optimizer_wd: 0
+    M_optimizer_reuse: False
+    G_param_strict: True
+    D_param_strict: True
+    E_param_strict: True
+    E_decay: 0
+  ]
+  dist: False
+  rank: 0
+  world_size: 1
+  opt_path: ../deep_learning/options/hrrr_mini_config.json
+  is_train: True
+  merge_bn: False
+  merge_bn_startpoint: -1
+  find_unused_parameters: True
+  use_static_graph: False
+  num_gpu: 1
+
+25-12-11 10:36:48.873 : Number of train images: 100,000, iters: 100,000
