@@ -6,18 +6,16 @@ ROOT = notebook_dir.parent
 
 sys.path.insert(0, "/home/s448562/LAB4")
 print(ROOT)
-import os
+
 
 import torch
 from trainer import Trainer
-
+from graphBuilder import BipartiteGraph
 from gnn4cd_model import GNN4CD_Model
-import json 
-from PhysicsNeMo.examples.weather.corrdiff.datasets.hrrrmini import HRRRMiniDataset
+from examples.weather.corrdiff.datasets.hrrrmini import HRRRMiniDataset
 
 device = torch.device("cuda" if torch.cuda.is_available() else "mps")
-#from graphBuilderMain import BipartiteGraph
-from graphBuilder import BipartiteGraph
+
 
 print("Device: ", device)
 
@@ -38,8 +36,6 @@ print("Device: ", device)
 
 '''
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Using device:", device)
 
 
 stats_path = "/home/s448562/LAB4/data_corrdiff_mini/stats.json"

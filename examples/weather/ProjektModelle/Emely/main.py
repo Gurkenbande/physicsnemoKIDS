@@ -6,24 +6,18 @@ ROOT = notebook_dir.parent
 
 sys.path.insert(0, "/home/s448562/LAB4")
 print(ROOT)
-import os
 
 import torch
 from trainer import Trainer
-
 from gnn4cd_model import GNN4CD_Model
-import json 
-from PhysicsNeMo.examples.weather.corrdiff.datasets.hrrrmini import HRRRMiniDataset
-
-device = torch.device("cuda" if torch.cuda.is_available() else "mps")
-
+from examples.weather.corrdiff.datasets.hrrrmini import HRRRMiniDataset
 from graphBuilder import BipartiteGraph
-
 from train_test import Trainer, Tester
 from torch_geometric.loader import DataLoader
 import torch.nn as nn
 from accelerate import Accelerator
 
+device = torch.device("cuda" if torch.cuda.is_available() else "mps")
 print("Device: ", device)
 
 
@@ -43,15 +37,12 @@ print("Device: ", device)
 
 '''
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Using device:", device)
 
+#stats_path = "/home/s448562/LAB4/data_corrdiff_mini/stats.json"
+#data_path = "/home/s448562/LAB4/data_corrdiff_mini/hrrr_mini_train.nc"
 
-stats_path = "/home/s448562/LAB4/data_corrdiff_mini/stats.json"
-data_path = "/home/s448562/LAB4/data_corrdiff_mini/hrrr_mini_train.nc"
-
-#stats_path = "/Users/emely/Uni/Lab4/Lab4/data_corrdiff_mini/stats.json"
-#data_path = "/Users/emely/Uni/Lab4/Lab4/data_corrdiff_mini/hrrr_mini_train.nc"
+stats_path = "/Users/emely/Uni/Lab4/Lab4/data_corrdiff_mini/stats.json"
+data_path = "/Users/emely/Uni/Lab4/Lab4/data_corrdiff_mini/hrrr_mini_train.nc"
 
 ds = HRRRMiniDataset(data_path=data_path, stats_path=stats_path)
 

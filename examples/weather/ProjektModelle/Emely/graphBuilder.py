@@ -1,8 +1,7 @@
-import xarray as xr
 import numpy as np
 import torch
 from torch_geometric.data import HeteroData
-from PhysicsNeMo.examples.weather.corrdiff.datasets.hrrrmini import HRRRMiniDataset
+
 
 class BipartiteGraph(torch.utils.data.Dataset):
     def __init__(
