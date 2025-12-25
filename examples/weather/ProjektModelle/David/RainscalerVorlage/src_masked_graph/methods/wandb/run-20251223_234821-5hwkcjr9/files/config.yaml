@@ -1,0 +1,295 @@
+_wandb:
+    value:
+        cli_version: 0.23.1
+        e:
+            r4bfdpar3md6ig21j5prx3kso7bqaynf:
+                args:
+                    - --opt
+                    - ../deep_learning/options/rainscaler_config.json
+                codePath: examples\weather\ProjektModelle\David\RainscalerVorlage\src_masked_graph\methods\rainscaler.py
+                codePathLocal: rainscaler.py
+                cpu_count: 8
+                cpu_count_logical: 16
+                cudaVersion: "13.1"
+                disk:
+                    /:
+                        total: "1021821579264"
+                        used: "793811677184"
+                email: david.klingenfuss03@gmail.com
+                executable: C:\Users\david\anaconda3\envs\Rainscale\python.exe
+                git:
+                    commit: b6d2f8888cdb23764b0bb6090a3f3b8e279871ce
+                    remote: https://github.com/Gurkenbande/physicsnemoKIDS.git
+                gpu: NVIDIA GeForce RTX 4050 Laptop GPU
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 2560
+                      memoryTotal: "6439305216"
+                      name: NVIDIA GeForce RTX 4050 Laptop GPU
+                      uuid: GPU-42beb445-0a21-1548-1fa6-93eb0b063b36
+                host: YogaguruDavid03
+                memory:
+                    total: "14701940736"
+                os: Windows-10-10.0.26200-SP0
+                program: C:\Users\david\PythonProjekte\physicsnemoKIDS\examples\weather\ProjektModelle\David\RainscalerVorlage\src_masked_graph\methods\rainscaler.py
+                python: CPython 3.10.19
+                root: C:\Users\david\PythonProjekte\physicsnemoKIDS\examples\weather\ProjektModelle\David\RainscalerVorlage\src_masked_graph\methods
+                startedAt: "2025-12-23T22:48:21.303097Z"
+                writerId: r4bfdpar3md6ig21j5prx3kso7bqaynf
+        m: []
+        python_version: 3.10.19
+        t:
+            "1":
+                - 1
+                - 41
+            "2":
+                - 1
+                - 41
+                - 54
+            "3":
+                - 13
+                - 16
+                - 61
+            "4": 3.10.19
+            "5": 0.23.1
+            "8":
+                - 3
+            "12": 0.23.1
+            "13": windows-amd64
+datasets:
+    value:
+        test:
+            coord_var: coord
+            dataloader_batch_size: 1
+            dataloader_num_workers: 0
+            dataloader_shuffle: false
+            dataroot_nc: C:/Users/david/PythonProjekte/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/hrrr_mini/hrrr_mini_train.nc
+            dataset_type: hrrr_netcdf
+            engine: h5netcdf
+            input_group: input
+            input_vars:
+                - u10m
+                - v10m
+                - t2m
+                - tcwv
+                - sp
+                - msl
+                - u1000
+                - u850
+                - u500
+                - u250
+                - v1000
+                - v850
+                - v500
+                - v250
+                - z1000
+                - z850
+                - z500
+                - z250
+                - t1000
+                - t850
+                - t500
+                - t250
+                - q1000
+                - q850
+                - q500
+                - q250
+            n_channels: 26
+            name: hrrr_mini_test
+            nan_to_num: 0
+            normalize: false
+            output_group: output
+            output_vars:
+                - 2t
+                - 10u
+                - 10v
+                - tp
+            phase: test
+            sample_dim: sample
+            scale: 8
+            time_var: time
+        train:
+            coord_var: coord
+            dataloader_batch_size: 128
+            dataloader_num_workers: 8
+            dataloader_shuffle: true
+            dataroot_nc: C:/Users/david/PythonProjekte/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/hrrr_mini/hrrr_mini_train.nc
+            dataset_type: hrrr_netcdf
+            engine: h5netcdf
+            input_group: input
+            input_vars:
+                - u10m
+                - v10m
+                - t2m
+                - tcwv
+                - sp
+                - msl
+                - u1000
+                - u850
+                - u500
+                - u250
+                - v1000
+                - v850
+                - v500
+                - v250
+                - z1000
+                - z850
+                - z500
+                - z250
+                - t1000
+                - t850
+                - t500
+                - t250
+                - q1000
+                - q850
+                - q500
+                - q250
+            n_channels: 26
+            name: hrrr_mini_train
+            nan_to_num: 0
+            normalize: false
+            output_group: output
+            output_vars:
+                - 2t
+                - 10u
+                - 10v
+                - tp
+            phase: train
+            sample_dim: sample
+            scale: 8
+            time_var: time
+dist:
+    value: false
+find_unused_parameters:
+    value: true
+gpu_ids:
+    value:
+        - 0
+is_train:
+    value: true
+merge_bn:
+    value: false
+merge_bn_startpoint:
+    value: 400000
+model:
+    value: gan
+n_channels:
+    value: 26
+netD:
+    value:
+        base_nc: 64
+        in_nc: 4
+        init_bn_type: uniform
+        init_gain: 0.2
+        init_type: orthogonal
+        n_layers: 3
+        net_type: discriminator_unet
+        norm_type: spectral
+netG:
+    value:
+        act_mode: R
+        downsample_mode: strideconv
+        gc: 32
+        in_nc: 26
+        init_bn_type: uniform
+        init_gain: 0.2
+        init_type: orthogonal
+        nb: 16
+        nc: 64
+        net_type: msrresnet0_mask
+        ng: 2
+        out_nc: 4
+        reduction: 16
+        scale: 8
+        upsample_mode: upconv
+num_gpu:
+    value: 1
+opt_path:
+    value: ../deep_learning/options/rainscaler_config.json
+path:
+    value:
+        images: ../../res/src_graph\msrresnet_gan_gcn_allNodes_drop_mask_globalLoss\images
+        log: ../../res/src_graph\msrresnet_gan_gcn_allNodes_drop_mask_globalLoss
+        models: ../../res/src_graph\msrresnet_gan_gcn_allNodes_drop_mask_globalLoss\models
+        options: ../../res/src_graph\msrresnet_gan_gcn_allNodes_drop_mask_globalLoss\options
+        pretrained_netD: null
+        pretrained_netE: null
+        pretrained_netG: null
+        pretrained_optimizerD: null
+        pretrained_optimizerG: null
+        root: ../../res/src_graph
+        task: ../../res/src_graph\msrresnet_gan_gcn_allNodes_drop_mask_globalLoss
+        tensorboard: ../../res/src_graph\msrresnet_gan_gcn_allNodes_drop_mask_globalLoss\logs
+rank:
+    value: 0
+scale:
+    value: 8
+sigma:
+    value:
+        - 0
+        - 50
+sigma_test:
+    value: 0
+task:
+    value: msrresnet_gan_gcn_allNodes_drop_mask_globalLoss
+train:
+    value:
+        D_init_iters: 0
+        D_lossfn_weight: 0.005
+        D_optimizer_lr: 1e-05
+        D_optimizer_reuse: true
+        D_optimizer_type: adam
+        D_optimizer_wd: 0
+        D_param_strict: true
+        D_scheduler_gamma: 0.5
+        D_scheduler_milestones:
+            - 3000000
+            - 12000000
+            - 18000000
+            - 30000000
+        D_scheduler_type: MultiStepLR
+        E_decay: 0.999
+        E_param_strict: true
+        F_feature_layer: 34
+        F_lossfn_type: l1
+        F_lossfn_weight: 0
+        F_use_input_norm: true
+        F_use_range_norm: false
+        F_weights: 1
+        G_lossfn_type: l1
+        G_lossfn_weight: 0.01
+        G_optimizer_betas:
+            - 0.9
+            - 0.999
+        G_optimizer_lr: 1e-05
+        G_optimizer_reuse: true
+        G_optimizer_type: adam
+        G_optimizer_wd: 0
+        G_param_strict: true
+        G_scheduler_gamma: 0.5
+        G_scheduler_milestones:
+            - 3000000
+            - 12000000
+            - 18000000
+            - 30000000
+        G_scheduler_restart_weights: 1
+        G_scheduler_type: MultiStepLR
+        M_lossfn_weight: 0.001
+        M_optimizer_betas:
+            - 0.9
+            - 0.999
+        M_optimizer_reuse: false
+        M_optimizer_type: adam
+        M_optimizer_wd: 0
+        M_scheduler_restart_weights: 1
+        checkpoint_print: 1
+        checkpoint_save: 25000
+        checkpoint_test: 1
+        gan_type: ragan
+        global_lossfn_weight: 0.001
+        manual_seed: 3407
+use_static_graph:
+    value: false
+world_size:
+    value: 1
