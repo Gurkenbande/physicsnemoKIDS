@@ -1,0 +1,44 @@
+{
+  "os":  "Windows-10-10.0.26200-SP0",
+  "python":  "CPython 3.10.19",
+  "startedAt":  "2025-12-23T22:56:47.534416Z",
+  "args":  [
+    "--opt",
+    "../deep_learning/options/rainscaler_config.json"
+  ],
+  "program":  "C:\\Users\\david\\PythonProjekte\\physicsnemoKIDS\\examples\\weather\\ProjektModelle\\David\\RainscalerVorlage\\src_masked_graph\\methods\\rainscaler.py",
+  "codePath":  "examples\\weather\\ProjektModelle\\David\\RainscalerVorlage\\src_masked_graph\\methods\\rainscaler.py",
+  "codePathLocal":  "rainscaler.py",
+  "git":  {
+    "remote":  "https://github.com/Gurkenbande/physicsnemoKIDS.git",
+    "commit":  "b6d2f8888cdb23764b0bb6090a3f3b8e279871ce"
+  },
+  "email":  "david.klingenfuss03@gmail.com",
+  "root":  "C:\\Users\\david\\PythonProjekte\\physicsnemoKIDS\\examples\\weather\\ProjektModelle\\David\\RainscalerVorlage\\src_masked_graph\\methods",
+  "host":  "YogaguruDavid03",
+  "executable":  "C:\\Users\\david\\anaconda3\\envs\\Rainscale\\python.exe",
+  "cpu_count":  8,
+  "cpu_count_logical":  16,
+  "gpu":  "NVIDIA GeForce RTX 4050 Laptop GPU",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "1021821579264",
+      "used":  "793809616896"
+    }
+  },
+  "memory":  {
+    "total":  "14701940736"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA GeForce RTX 4050 Laptop GPU",
+      "memoryTotal":  "6439305216",
+      "cudaCores":  2560,
+      "architecture":  "Ada",
+      "uuid":  "GPU-42beb445-0a21-1548-1fa6-93eb0b063b36"
+    }
+  ],
+  "cudaVersion":  "13.1",
+  "writerId":  "6tj0hmk2yhqa3qhdejrkj9xvdm3tbyj1"
+}
