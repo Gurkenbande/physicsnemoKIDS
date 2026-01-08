@@ -17,3 +17,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 stats_path = r"C:\Users\ryadw\OneDrive\Desktop\stats.json"
 data_path = r"C:\Users\ryadw\OneDrive\Desktop\hrrr_mini_train.nc"
+
+if not os.path.exists(stats_path):
+    raise FileNotFoundError(f"Stats file not found: {stats_path}")
+if not os.path.exists(data_path):
+    raise FileNotFoundError(f"Data file not found: {data_path}")
