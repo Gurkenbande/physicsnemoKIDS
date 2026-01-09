@@ -1,5 +1,6 @@
 import os.path
 import sys
+import os
 sys.path.insert(0, '../deep_learning')
 import math
 import argparse
@@ -20,6 +21,69 @@ from models.select_model import define_Model
 
 import wandb
 
+def _is_cluster() -> bool:
+    return (
+        "SLURM_JOB_ID" in os.environ
+        or "SLURM_CLUSTER_NAME" in os.environ
+        or "SBATCH_JOB_ID" in os.environ
+    )
+
+def _apply_auto_paths(opt):
+    local_nc = "C:/users/david/PythonProjekte/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/hrrr_mini/hrrr_mini_train.nc"
+    local_stats = "C:/users/david/PythonProjekte/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/hrrr_mini/stats.json"
+
+    cluster_nc = "/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/modulus_datasets-hrrr_mini_v1/hrrr_mini/hrrr_mini_train.nc"
+    cluster_stats = "/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/modulus_datasets-hrrr_mini_v1/hrrr_mini/stats.json"
+
+    use_cluster = _is_cluster()
+
+    for phase in ["train", "test"]:
+        if "datasets" not in opt or phase not in opt["datasets"]:
+            continue
+
+        ds = opt["datasets"][phase]
+
+        if use_cluster:
+            ds["dataroot_nc"] = cluster_nc
+            ds["stats_path"] = cluster_stats
+        else:
+            ds["dataroot_nc"] = local_nc
+            ds["stats_path"] = local_stats
+
+    return opt
+
+import os
+import sys
+
+def _add_physicsnemo_root():
+    here = os.path.abspath(os.path.dirname(__file__))
+    p = here
+    for _ in range(20):
+        cand = os.path.join(p, "examples", "weather", "corrdiff")
+        if os.path.isdir(cand):
+            if p not in sys.path:
+                sys.path.insert(0, p)
+            return p
+        p = os.path.dirname(p)
+    return None
+
+_add_physicsnemo_root()
+
+def _add_corrdiff_root():
+    import os, sys
+    here = os.path.abspath(os.path.dirname(__file__))
+    p = here
+    for _ in range(20):
+        corrdiff_root = os.path.join(p, "examples", "weather", "corrdiff")
+        if os.path.isdir(os.path.join(corrdiff_root, "datasets")):
+            if corrdiff_root not in sys.path:
+                sys.path.insert(0, corrdiff_root)
+            return corrdiff_root
+        p = os.path.dirname(p)
+    return None
+
+_add_corrdiff_root()
+
 
 def main(json_path='../deep_learning/options/rainscaler_config.json'):
 
@@ -37,6 +101,9 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
 
     opt = option.parse(parser.parse_args().opt, is_train=True)
     opt['dist'] = parser.parse_args().dist
+
+    opt = _apply_auto_paths(opt)
+
 
     # ----------------------------------------
     # distributed settings
@@ -89,18 +156,8 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
         logger = logging.getLogger(logger_name)
         logger.info(option.dict2str(opt))
 
-    wandb_run = None
     if opt['rank'] == 0:
-        wandb_run = wandb.init(
-            project="rainscale",
-            name=opt["task"] if "task" in opt else None,
-            config=option.nonedict_to_dict(opt) if hasattr(option, "nonedict_to_dict") else dict(opt),
-        )
-
-
-
-    
-
+        wandb.init(project="rainscale")
 
     # ----------------------------------------
     # seed
@@ -215,11 +272,8 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
                     message += '{:s}: {:.3e} '.format(k, v)
                 logger.info(message)
 
-                if wandb_run is not None:
-                    payload = {}
-                    for k, v in logs.items():
-                        payload[f"train/{k}"] = float(v)
-                    wandb.log(payload, step=int(current_step))
+                wandb.log(logs, step=current_step)
+                print(current_step)
 
 
             # -------------------------------
@@ -251,7 +305,7 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
                     # util.mkdir(img_dir)
 
                     model.feed_data(test_data)
-                    model.testx8()
+                    model.test()
 
                     visuals = model.current_visuals()
                     E_img = util.tensor2uint_regression(visuals['E'])
@@ -271,16 +325,6 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
                     # -----------------------
                     current_psnr,current_mae = util.calculate_score(E_img, H_img, border=border)
 
-                    if wandb_run is not None:
-                        if current_psnr is not None and np.isfinite(current_psnr):
-                            wandb.log(
-                                {
-                                    "psnr_db": float(current_psnr),
-                                    "mae": float(current_mae * 100),
-                                },
-                                step=int(current_step),
-                            )
-
                     current_ssim = util.calculate_ssim(E_img, H_img, border=border)
                     psnr_str = "nan" if current_psnr is None else f"{current_psnr:<4.2f}"
                     ssim_str = "nan" if current_ssim is None else f"{current_ssim:<7.5f}"
@@ -288,16 +332,16 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
 
                     logger.info('{:->4d}--> {:>10s} | {}dB | {} | {} '.format(idx, image_name_ext, psnr_str, mae_str, ssim_str))
 
-                    if wandb_run is not None:
-                        payload = {}
-                        if current_psnr is not None and np.isfinite(current_psnr):
-                            payload["test/psnr_db"] = float(current_psnr)
-                        if current_mae is not None and np.isfinite(current_mae):
-                            payload["test/mae"] = float(current_mae * 100) 
-                        if payload:
-                            wandb.log(payload, step=int(current_step))
+                    wandb.log(
+                        {
+                            "psnr_db": current_psnr,
+                            "mae": current_mae * 100,
+                            "ssim": current_ssim,
+                        },
+                        step=idx,
+                    )
 
-
+                    print(idx)
 
                     if current_psnr is not None:
                         avg_psnr += current_psnr
@@ -319,9 +363,6 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
 
                 # testing log
                 logger.info('<epoch:{:3d}, iter:{:8,d}, Average PSNR : {:<.2f}dB, Average MAE : {:<.5f} , Average SSIM : {:<.5f}\n'.format(epoch, current_step, avg_psnr, avg_mae*100, avg_ssim))
-
-    if wandb_run is not None:
-        wandb.finish()
 
 if __name__ == '__main__':
     main()

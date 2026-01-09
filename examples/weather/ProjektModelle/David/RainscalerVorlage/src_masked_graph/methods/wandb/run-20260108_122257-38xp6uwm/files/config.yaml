@@ -1,0 +1,57 @@
+_wandb:
+    value:
+        cli_version: 0.23.1
+        e:
+            dfzeyksze9jc0jn6rhcoczp5j0myosd4:
+                args:
+                    - --opt
+                    - ../deep_learning/options/rainscaler_config.json
+                codePath: examples\weather\ProjektModelle\David\RainscalerVorlage\src_masked_graph\methods\rainscaler.py
+                codePathLocal: rainscaler.py
+                cpu_count: 8
+                cpu_count_logical: 16
+                cudaVersion: "13.1"
+                disk:
+                    /:
+                        total: "1021821579264"
+                        used: "793734836224"
+                email: david.klingenfuss03@gmail.com
+                executable: C:\Users\david\anaconda3\envs\Rainscale\python.exe
+                git:
+                    commit: 4b7aaf9d506fdc77a9aa2174536c580109320819
+                    remote: https://github.com/Gurkenbande/physicsnemoKIDS.git
+                gpu: NVIDIA GeForce RTX 4050 Laptop GPU
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 2560
+                      memoryTotal: "6439305216"
+                      name: NVIDIA GeForce RTX 4050 Laptop GPU
+                      uuid: GPU-42beb445-0a21-1548-1fa6-93eb0b063b36
+                host: YogaguruDavid03
+                memory:
+                    total: "14701940736"
+                os: Windows-10-10.0.26200-SP0
+                program: C:\Users\david\PythonProjekte\physicsnemoKIDS\examples\weather\ProjektModelle\David\RainscalerVorlage\src_masked_graph\methods\rainscaler.py
+                python: CPython 3.10.19
+                root: C:\Users\david\PythonProjekte\physicsnemoKIDS\examples\weather\ProjektModelle\David\RainscalerVorlage\src_masked_graph\methods
+                startedAt: "2026-01-08T11:22:57.793557Z"
+                writerId: dfzeyksze9jc0jn6rhcoczp5j0myosd4
+        m: []
+        python_version: 3.10.19
+        t:
+            "1":
+                - 1
+                - 41
+            "2":
+                - 1
+                - 41
+                - 54
+            "3":
+                - 61
+            "4": 3.10.19
+            "5": 0.23.1
+            "8":
+                - 3
+            "12": 0.23.1
+            "13": windows-amd64

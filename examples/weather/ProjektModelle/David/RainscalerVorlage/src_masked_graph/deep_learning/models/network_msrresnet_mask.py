@@ -214,12 +214,15 @@ class MSRResNet0(nn.Module):
 
         self.model = B.sequential(m_head, B.ShortcutBlock(B.sequential(*m_body)))#
         self.model2 = B.sequential( *m_uper, m_tail)
-        nnodes = 8*8
-        self.gc = graph_constructor(nnodes=nnodes, k=20,dim=40, nc=nc, static_feat=True) #c
+        #self.gc = graph_constructor(nnodes=nnodes, k=20,dim=40, nc=nc, static_feat=True) #c
         # To do here!
         #self.gc = EdgeNet(in_features=nc, num_features=128) #cuda memory
         self.gcn = GCN(nfeat=nc, nhid=nc//3, nclass=nc, dropout=0) #c
-        self.idx  = torch.arange(nnodes).to(device) #c
+        #self.idx  = torch.arange(nnodes).to(device) #c
+        nnodes = 64 * 64
+        self.gc = graph_constructor(nnodes=nnodes, k=20, dim=40, nc=nc, static_feat=True)
+        self.register_buffer("idx", torch.arange(nnodes))
+
         self.para_lambda = nn.Parameter(torch.zeros(1)) #c
         self.unet = UNet(in_nc,1)
         self.sigmoid = nn.Sigmoid()
@@ -255,6 +258,10 @@ class MSRResNet0(nn.Module):
         #h_m = h_m.repeat(1, 1, 1, h_m.shape[-2]) #c
         #h_m2 = h_m.transpose(2, 3) #c#(b,1,4096,4096)
         #h = torch.logical_or(h_m, h_m2) #c #(2,1,4096,4096)
+
+        B, C, H, W = x.shape
+        nnodes = H * W
+
 
         static_feature = x.view(x.shape[0], x.shape[1], -1)   # (B, C, 4096)
         static_feature = static_feature.transpose(1, 2)       # (B, 4096, C)

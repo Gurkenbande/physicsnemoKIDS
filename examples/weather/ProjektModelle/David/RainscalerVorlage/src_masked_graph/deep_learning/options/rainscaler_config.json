@@ -3,8 +3,8 @@
   , "model": "gan" 
   , "gpu_ids": [0]
 
-  , "scale": 8      
-  , "n_channels": 26
+  , "scale": 1
+  , "n_channels": 28
   , "sigma": [0, 50] 
   , "sigma_test": 0  
 
@@ -24,9 +24,10 @@
     , "input_group": "input"
     , "output_group": "output"
     ,"name": "hrrr_mini_train",
-    "dataset_type": "hrrr_netcdf",
+    "dataset_type": "hrrr_mini_nemo",
 
-    "dataroot_nc": "C:/Users/david/PythonProjekte/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/hrrr_mini/hrrr_mini_train.nc",
+    "dataroot_nc": "C:/users/david/PythonProjekte/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/hrrr_mini/hrrr_mini_train.nc",
+    "stats_path": "C:/users/david/PythonProjekte/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/hrrr_mini/stats.json",
 
     "input_vars": ["u10m","v10m","t2m","tcwv","sp","msl","u1000","u850","u500","u250","v1000","v850","v500","v250","z1000","z850","z500","z250","t1000","t850","t500","t250","q1000","q850","q500","q250"],
     "output_vars": ["2t","10u","10v","tp"],
@@ -39,7 +40,7 @@
     "normalize": false,
 
     "dataloader_shuffle": true,
-    "dataloader_num_workers": 8,
+    "dataloader_num_workers": 0,
     "dataloader_batch_size": 128
   },
 
@@ -49,9 +50,10 @@
     , "output_group": "output"
 
     , "name": "hrrr_mini_test",
-    "dataset_type": "hrrr_netcdf",
+    "dataset_type": "hrrr_mini_nemo",
 
-    "dataroot_nc": "C:/Users/david/PythonProjekte/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/hrrr_mini/hrrr_mini_train.nc",
+    "dataroot_nc": "C:/users/david/PythonProjekte/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/hrrr_mini/hrrr_mini_train.nc",
+    "stats_path": "C:/users/david/PythonProjekte/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/hrrr_mini/stats.json",
 
     "input_vars": ["u10m","v10m","t2m","tcwv","sp","msl","u1000","u850","u500","u250","v1000","v850","v500","v250","z1000","z850","z500","z250","t1000","t850","t500","t250","q1000","q850","q500","q250"],
     "output_vars": ["2t","10u","10v","tp"],
@@ -71,7 +73,7 @@
 
   , "netG": {
     "net_type": "msrresnet0_mask"  
-    , "in_nc": 26      
+    , "in_nc": 28      
     , "out_nc": 4       
     , "nc": 64          
     , "nb": 16          

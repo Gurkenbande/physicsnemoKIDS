@@ -1,0 +1,2 @@
+/home/s460479/ProjektRainscale/Cluster/venv/bin/python: can't open file '/var/lib/slurm/slurmd/job2130593/rainscaler.py': [Errno 2] No such file or directory
+srun: error: jn108: task 0: Exited with exit code 2

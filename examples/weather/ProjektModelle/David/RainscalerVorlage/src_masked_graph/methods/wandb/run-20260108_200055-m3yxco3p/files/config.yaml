@@ -1,0 +1,37 @@
+_wandb:
+    value:
+        cli_version: 0.23.1
+        e:
+            hvlybxv2lk37icl3avlhihy1o17qbvcw:
+                args:
+                    - --opt
+                    - ../deep_learning/options/rainscaler_config.json
+                codePath: examples\weather\ProjektModelle\David\RainscalerVorlage\src_masked_graph\methods\rainscaler.py
+                codePathLocal: rainscaler.py
+                email: david.klingenfuss03@gmail.com
+                executable: C:\Users\david\anaconda3\envs\Rainscale\python.exe
+                git:
+                    commit: 4b7aaf9d506fdc77a9aa2174536c580109320819
+                    remote: https://github.com/Gurkenbande/physicsnemoKIDS.git
+                host: YogaguruDavid03
+                os: Windows-10-10.0.26200-SP0
+                program: C:\Users\david\PythonProjekte\physicsnemoKIDS\examples\weather\ProjektModelle\David\RainscalerVorlage\src_masked_graph\methods\rainscaler.py
+                python: CPython 3.10.19
+                root: C:\Users\david\PythonProjekte\physicsnemoKIDS\examples\weather\ProjektModelle\David\RainscalerVorlage\src_masked_graph\methods
+                startedAt: "2026-01-08T19:00:55.066408Z"
+                writerId: hvlybxv2lk37icl3avlhihy1o17qbvcw
+        m: []
+        python_version: 3.10.19
+        t:
+            "1":
+                - 1
+                - 41
+            "2":
+                - 1
+                - 41
+            "4": 3.10.19
+            "5": 0.23.1
+            "8":
+                - 3
+            "12": 0.23.1
+            "13": windows-amd64

@@ -138,7 +138,7 @@ class HRRRMiniDataset(DownscalingDataset):
         """Extend x around edges with linear extrapolation."""
         y_shape = (
             x.shape[0],
-            x.shape[1] * self.upsample_factor,
+            x.shape[1] * self.upsample_factor,                  
             x.shape[2] * self.upsample_factor,
         )
         y = np.empty(y_shape, dtype=np.float32)

@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/ProjektModelle/David/RainscalerVorlage/src_masked_graph/methods/rainscaler.py", line 18, in <module>
+    from data.select_dataset import define_Dataset
+ModuleNotFoundError: No module named 'data'
+srun: error: jn108: task 0: Exited with exit code 1

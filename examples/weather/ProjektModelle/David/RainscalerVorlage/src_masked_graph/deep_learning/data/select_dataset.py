@@ -35,6 +35,10 @@ def define_Dataset(dataset_opt):
     elif dataset_type in ['hrrr_netcdf', 'hrrr', 'netcdf']:
         from data.dataset_hrrr_netcdf import DatasetHRRRNetCDF as D
 
+    elif dataset_type in ['hrrr_mini_nemo', 'hrrr_mini_framework', 'hrrrmini_nemo']:
+        from data.dataset_hrrr_mini_nemo import DatasetHRRRMiniNeMo as D
+
+
 
     # -----------------------------------------
     # common

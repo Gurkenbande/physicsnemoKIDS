@@ -1,11 +1,16 @@
+#!/bin/bash
+#SBATCH -J rainscale
+#SBATCH -c 8
+#SBATCH --mem=32G
+#SBATCH -p standard
+#SBATCH --gres=gpu:1
+#SBATCH --time=12:00:00
+#SBATCH --tmp=5G
+#SBATCH -e /home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/ProjektModelle/David/RainscalerVorlage/src_masked_graph/methods/logs/slurm-%j.out
 
-if [[ "$1"  == "swinir" ]]; then
+cd /home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/ProjektModelle/David/RainscalerVorlage/src_masked_graph/methods
 
-    CUDA_VISIBLE_DEVICES=1,3 nohup python -m torch.distributed.launch --nproc_per_node=2 --master_port=1234 \
-   swinir_ppd.py --opt ../deep_learning/utils/swinir_config.json  --dist True > swinir_ppd.txt
+source /home/s460479/ProjektRainscale/Cluster/venv/bin/activate
 
-fi
-
-
-
+srun python -u rainscaler.py --opt ../deep_learning/options/rainscaler_config.json
 

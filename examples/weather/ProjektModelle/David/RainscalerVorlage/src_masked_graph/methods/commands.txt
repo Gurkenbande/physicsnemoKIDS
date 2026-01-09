@@ -1,0 +1,11 @@
+cd /mnt/c/Users/david/PythonProjekte/physicsnemoKIDS
+
+rsync -av --update \
+  --exclude "**/__pycache__/**" \
+  --exclude "**/.git/**" \
+  --exclude "**/*.h5" \
+  --exclude "**/*.hdf5" \
+  ./ \
+  s460479@julia2.hpc.uni-wuerzburg.de:/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/
+
+  source /home/s460479/ProjektRainscale/Cluster/venv/bin/activate

@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/ProjektModelle/David/RainscalerVorlage/src_masked_graph/methods/rainscaler.py", line 14, in <module>
+    from utils import utils_image as util
+  File "/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/ProjektModelle/David/RainscalerVorlage/src_masked_graph/methods/../deep_learning/utils/utils_image.py", line 6, in <module>
+    import cv2
+ModuleNotFoundError: No module named 'cv2'
+srun: error: jn117: task 0: Exited with exit code 1
