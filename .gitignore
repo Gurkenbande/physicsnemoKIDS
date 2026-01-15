@@ -174,3 +174,7 @@ multirun/
 # SLURM
 slurm-*.out
 sbatch_logs/
+
+wandb/
+Data/
+hrrr_mini/
