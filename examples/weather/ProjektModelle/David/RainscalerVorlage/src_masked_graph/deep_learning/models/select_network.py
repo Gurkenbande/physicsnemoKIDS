@@ -142,7 +142,8 @@ def define_G(opt):
                 nb=opt_net['nb'],
                 upscale=opt_net['scale'],
                 act_mode=opt_net['act_mode'],
-                upsample_mode=opt_net['upsample_mode'])
+                upsample_mode=opt_net['upsample_mode'],
+                pos_channels=opt_net.get('pos_channels', 0))
 
     # ----------------------------------------
     # modified SRResNet v0.1

@@ -5,7 +5,9 @@ rsync -av --update \
   --exclude "**/.git/**" \
   --exclude "**/*.h5" \
   --exclude "**/*.hdf5" \
+  --exclude "**/*.nc" \
   ./ \
   s460479@julia2.hpc.uni-wuerzburg.de:/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/
+
 
   source /home/s460479/ProjektRainscale/Cluster/venv/bin/activate

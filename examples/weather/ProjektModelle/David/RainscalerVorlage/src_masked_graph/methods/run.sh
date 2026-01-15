@@ -13,4 +13,3 @@ cd /home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/Proje
 source /home/s460479/ProjektRainscale/Cluster/venv/bin/activate
 
 srun python -u rainscaler.py --opt ../deep_learning/options/rainscaler_config.json
-

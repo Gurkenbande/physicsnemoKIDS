@@ -207,7 +207,7 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
         elif phase == 'test':
             test_set = define_Dataset(dataset_opt)
             test_loader = DataLoader(test_set, batch_size=1,
-                                     shuffle=False, num_workers=1,
+                                     shuffle=False, num_workers=dataset_opt['dataloader_num_workers'],
                                      drop_last=False, pin_memory=True)
         else:
             raise NotImplementedError("Phase [%s] is not recognized." % phase)

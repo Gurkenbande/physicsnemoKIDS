@@ -172,7 +172,7 @@ class GraphConvolution(Module):
                + str(self.out_features) + ')'
 
 class MSRResNet0(nn.Module):
-    def __init__(self, in_nc=3, out_nc=3, nc=64, nb=16, upscale=4, act_mode='R', upsample_mode='upconv'):
+    def __init__(self, in_nc=3, out_nc=3, nc=64, nb=16, upscale=4, act_mode='R', upsample_mode='upconv', pos_channels=0):
         """
         in_nc: channel number of input
         out_nc: channel number of output
@@ -224,7 +224,11 @@ class MSRResNet0(nn.Module):
         self.register_buffer("idx", torch.arange(nnodes))
 
         self.para_lambda = nn.Parameter(torch.zeros(1)) #c
-        self.unet = UNet(in_nc,1)
+        if pos_channels < 0 or pos_channels > in_nc:
+            raise ValueError("pos_channels must be between 0 and in_nc.")
+        self.pos_channels = pos_channels
+        unet_in_nc = in_nc - pos_channels
+        self.unet = UNet(unet_in_nc, 1)
         self.sigmoid = nn.Sigmoid()
         
 
@@ -233,20 +237,32 @@ class MSRResNet0(nn.Module):
         :param x: B,C,W,H
         :return:
         """
-        mask = self.unet(x)
+        if self.pos_channels > 0:
+            x_data = x[:, :-self.pos_channels, :, :]
+            x_pos = x[:, -self.pos_channels:, :, :]
+        else:
+            x_data = x
+            x_pos = None
+
+        mask = self.unet(x_data)
                 
         #difference = self.pool(hr) - x
 
         weights = self.sigmoid(1000*mask) #+ bias
         #weights = self.softshrink(difference)
 
-        x = x * weights
+        x_data = x_data * weights
 
         m = torch.where(weights >= 0.5, 1, 0)
 
         #b,c,w,h= x.shape
         #x = x*mask#c
  
+        if x_pos is not None:
+            x = torch.cat([x_data, x_pos], dim=1)
+        else:
+            x = x_data
+
         x = self.model(x) #(2,96,64,64)
         
         #h_m = torch.where(mask >= 0.5, 1, 0) #c #we should also think about strong underestimation in LR! >0.01 and < 100?

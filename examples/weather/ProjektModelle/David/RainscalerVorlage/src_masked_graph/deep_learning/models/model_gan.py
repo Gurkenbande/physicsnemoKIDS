@@ -10,6 +10,7 @@ from models.model_base import ModelBase
 from models.loss import GANLoss, PerceptualLoss
 from models.loss_ssim import SSIMLoss
 from utils.utils_model import test_mode
+from physicsnemo.models.diffusion.song_unet import SongUNetPosEmbd
 
 class ModelGAN(ModelBase):
     """Train with pixel-VGG-GAN loss"""
@@ -19,6 +20,8 @@ class ModelGAN(ModelBase):
         # define network
         # ------------------------------------
         self.opt_train = self.opt['train']    # training option
+        self.pos_channels = int(self.opt["netG"].get("pos_channels", 0))
+        self._pos_embd_cache = {}
         self.netG = define_G(opt)
         self.netG = self.model_to_device(self.netG)
         if self.is_train:
@@ -28,6 +31,25 @@ class ModelGAN(ModelBase):
                 self.netE = define_G(opt).to(self.device).eval()
         sf = opt['scale']
         self.pool = torch.nn.AvgPool2d(kernel_size=sf, stride=sf)
+    
+    def _get_positional_embedding(self, height, width, device, dtype):
+        if self.pos_channels <= 0:
+            return None
+        key = (height, width, str(device), str(dtype))
+        if key in self._pos_embd_cache:
+            return self._pos_embd_cache[key]
+
+        dummy = type("Dummy", (), {})()
+        dummy.N_grid_channels = self.pos_channels
+        dummy.gridtype = "sinusoidal"
+        dummy.img_shape_y = height
+        dummy.img_shape_x = width
+        grid = SongUNetPosEmbd._get_positional_embedding(dummy)
+        if grid is None:
+            raise ValueError("Positional embedding grid could not be created.")
+        grid = grid.to(device=device, dtype=dtype)
+        self._pos_embd_cache[key] = grid
+        return grid
 
     """
     # ----------------------------------------
@@ -196,6 +218,15 @@ class ModelGAN(ModelBase):
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
         self.L = data['L'].to(self.device)
+        if self.pos_channels > 0:
+            pos = self._get_positional_embedding(
+                self.L.shape[-2],
+                self.L.shape[-1],
+                self.L.device,
+                self.L.dtype,
+            )
+            pos = pos.unsqueeze(0).expand(self.L.shape[0], -1, -1, -1)
+            self.L = torch.cat([self.L, pos], dim=1)
         if need_H:
             self.H = data['H'].to(self.device)
         #self.mask_label = torch.nan_to_num(self.pool(self.H) / self.L, nan=1.0)
