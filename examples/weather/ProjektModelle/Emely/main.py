@@ -77,7 +77,8 @@ if __name__ == "__main__":
     args = type('', (), {})()
     args.epochs = 5
     args.alpha = 0.75
-    args.output_path = "./output/"
+    BASE_DIR = Path(__file__).resolve().parent
+    args.output_path = str(BASE_DIR / "output")
     args.loss_fn = "MSE"
     args.model_type = "Rall"
 
@@ -133,3 +134,6 @@ if __name__ == "__main__":
     )
 
     print("finittoooo", flush=True)
+
+# download plots: scp -r s448562@julia2.hpc.uni-wuerzburg.de:/home/s448562/physicsnemoKIDS/examples/weather/ProjektModelle/Emely/output .
+
