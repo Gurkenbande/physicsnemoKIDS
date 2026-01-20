@@ -15,6 +15,11 @@
 # limitations under the License.
 
 """Streaming images and labels from datasets created with dataset_tool.py."""
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent 
+sys.path.insert(0, str(ROOT))  
 
 import logging
 import random
@@ -342,13 +347,13 @@ class ZarrDataset(DownscalingDataset):
     def __init__(
         self,
         dataset,
-        in_channels=(0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19),
-        out_channels=(0, 17, 18, 19),
+        in_channels=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,13,14,15,16, 17, 18, 19),
+        out_channels=(0, 1, 2, 3),
         img_shape_x=448,
         img_shape_y=448,
         roll=False,
         add_grid=True,
-        ds_factor=1,
+        ds_factor=4,
         train=True,
         all_times=False,
         n_history=0,

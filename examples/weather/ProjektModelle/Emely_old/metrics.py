@@ -7,6 +7,10 @@ import torch
 
 
 class AverageMeter(object):
+    '''
+    A generic class to keep track of performance metrics during training or testing of models
+    (adapted from the Deep Learning tutorials of DSSC)
+    '''
     def __init__(self):
         self.reset()
 
@@ -21,15 +25,6 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
-
-    def to_dict(self):
-        return {
-            "val": float(self.val),
-            "avg": float(self.avg),
-            "sum": float(self.sum),
-            "count": int(self.count)
-        }
-
 
 
 def accuracy_binary_one(prediction, target, reduction="mean"):

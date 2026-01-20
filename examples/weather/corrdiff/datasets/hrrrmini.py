@@ -14,6 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+import sys
+
+notebook_dir = Path(__file__).resolve().parent if "__file__" in globals() else Path().resolve()
+ROOT = notebook_dir.parent  
+
+#sys.path.insert(0, "/Users/emely/Uni/Lab4/physicsnemoKIDS")
+sys.path.insert(0, "/home/s448562/LAB4")
+
 import datetime
 import math
 from typing import List, Tuple, Union
@@ -25,8 +34,8 @@ import xarray as xr
 
 from physicsnemo.utils.diffusion import convert_datetime_to_cftime
 
-from datasets.base import ChannelMetadata, DownscalingDataset
-
+#from datasets.base import ChannelMetadata, DownscalingDataset
+from .base import ChannelMetadata, DownscalingDataset
 
 class HRRRMiniDataset(DownscalingDataset):
     """Reader for reduced-size HRRR dataset used for CorrDiff-mini."""

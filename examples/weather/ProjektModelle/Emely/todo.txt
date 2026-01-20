@@ -1,0 +1,53 @@
+
+channels
+netcdf plotten
+
+
+
+
+
+- data.x_dict['low']: shape (n_coarse, seq_l, n_features) → (64, xx, 26)
+    - 64 coarse nodes (8x8 grid)
+    - seq_l = xx timesteps per node ??
+    - 26 input features per timestep (ERA5 variables) + 2 invariant
+- data.x_dict['high']: shape (n_fine, n_high_features) -> (4096,4)
+    - 4096 fine nodes (64x64 grid)
+    - 4 output features per node (HRRR variables)
+- y_high: ground truth labels for the fine nodes, same shape as x_dict['high']
+- normalization stats: precomputed mean and standard deviation for each variable:
+    - ERA5 input (low-res)
+    - HRRR output (high-res)
+    - invariant (e.g. latitude, longitude, elevation)
+
+
+#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
+
+cp -r \
+/home/s448562/LAB4/data_corrdiff_3months.zarr \
+/tmp/data_corrdiff_3months.zarr
+
+
+0 maximum_radar_reflectivity
+1 temperature_2m
+2 eastward_wind_10m
+3 northward_wind_10m
+0 tcwv
+1 geopotential_height
+2 temperature
+3 eastward_wind
+4 northward_wind
+5 geopotential_height
+6 temperature
+7 eastward_wind
+8 northward_wind
+9 geopotential_height
+10 temperature
+11 eastward_wind
+12 northward_wind
+13 geopotential_height
+14 temperature
+15 eastward_wind
+16 northward_wind
+17 temperature_2m
+18 eastward_wind_10m
+19 northward_wind_10m

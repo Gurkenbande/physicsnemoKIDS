@@ -4,7 +4,7 @@ import sys
 notebook_dir = Path(__file__).resolve().parent if "__file__" in globals() else Path().resolve()
 ROOT = notebook_dir.parent
 
-sys.path.insert(0, "/home/s448562/LAB4")
+sys.path.insert(0, "/Users/emely/Uni/Lab4/physicsnemoKIDS")
 print(ROOT)
 
 
@@ -38,11 +38,11 @@ print("Device: ", device)
 
 
 
-stats_path = "/home/s448562/LAB4/data_corrdiff_mini/stats.json"
-data_path = "/home/s448562/LAB4/data_corrdiff_mini/hrrr_mini_train.nc"
+#stats_path = "/home/s448562/LAB4/data_corrdiff_mini/stats.json"
+#data_path = "/home/s448562/LAB4/data_corrdiff_mini/hrrr_mini_train.nc"
 
-#stats_path = "/Users/emely/Uni/Lab4/Lab4/data_corrdiff_mini/stats.json"
-#data_path = "/Users/emely/Uni/Lab4/Lab4/data_corrdiff_mini/hrrr_mini_train.nc"
+stats_path = "/Users/emely/Uni/Lab4/Lab4/data_corrdiff_mini/stats.json"
+data_path = "/Users/emely/Uni/Lab4/Lab4/data_corrdiff_mini/hrrr_mini_train.nc"
 
 ds = HRRRMiniDataset(data_path=data_path, stats_path=stats_path)
 
