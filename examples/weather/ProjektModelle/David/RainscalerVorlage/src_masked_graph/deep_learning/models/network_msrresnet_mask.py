@@ -283,7 +283,10 @@ class MSRResNet0(nn.Module):
         static_feature = static_feature.transpose(1, 2)       # (B, 4096, C)
         static_feature = static_feature.mean(dim=0)           # (4096, C)
         #_, adj = self.gc(static_feature)
-        adj = self.gc(self.idx, static_feat=static_feature) #c  # this one will be removed later, only exist in model_plain for backpropogation, or use fullA during testing
+        idx = self.idx
+        if idx.numel() != nnodes or idx.device != x.device:
+            idx = torch.arange(nnodes, device=x.device)
+        adj = self.gc(idx, static_feat=static_feature) #c  # this one will be removed later, only exist in model_plain for backpropogation, or use fullA during testing
 
         out = self.gcn(x, adj) #(b,4096,96) #c
         out = out.view(x.shape) #c

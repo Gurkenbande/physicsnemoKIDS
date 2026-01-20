@@ -1,0 +1,150 @@
+{
+  "task": "msrresnet_gan_gcn_gefs_hrrr",
+  "model": "gan",
+  "gpu_ids": [0],
+
+  "scale": 1,
+  "n_channels": 41,
+  "sigma": [0, 50],
+  "sigma_test": 0,
+
+  "merge_bn": false,
+  "merge_bn_startpoint": 400000,
+
+  "path": {
+    "root": "../../res/src_graph",
+    "pretrained_netG": null,
+    "pretrained_netD": null,
+    "pretrained_netE": null
+  },
+
+  "datasets": {
+    "train": {
+      "name": "gefs_hrrr_train",
+      "dataset_type": "gefs_hrrr_nemo",
+
+      "data_path": "/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data",
+      "input_surface_variables": ["u10m", "v10m", "t2m", "q2m", "sp", "msl", "precipitable_water"],
+      "input_isobaric_variables": ["u1000", "u925", "u850", "u700", "u500", "u250", "v1000", "v925", "v850", "v700", "v500", "v250", "z1000", "z925", "z850", "z700", "z500", "z200", "t1000", "t925", "t850", "t700", "t500", "t100", "r1000", "r925", "r850", "r700", "r500", "r100"],
+      "output_variables": ["u10m", "v10m", "t2m", "precip", "cat_snow", "cat_ice", "cat_freez", "cat_rain", "cat_none"],
+      "prob_variables": ["cat_snow", "cat_ice", "cat_freez", "cat_rain"],
+
+      "train": true,
+      "normalize": true,
+      "train_years": [2020, 2021, 2022, 2023],
+      "valid_years": [2024],
+      "hrrr_window": [[1, 1057], [4, 1796]],
+      "sample_shape": [64, 64],
+      "ds_factor": 1,
+      "shard": false,
+      "overfit": false,
+      "use_all": false,
+
+      "dataloader_shuffle": true,
+      "dataloader_num_workers": 0,
+      "dataloader_batch_size": 16
+    },
+
+    "test": {
+      "name": "gefs_hrrr_test",
+      "dataset_type": "gefs_hrrr_nemo",
+
+      "data_path": "/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data",
+      "input_surface_variables": ["u10m", "v10m", "t2m", "q2m", "sp", "msl", "precipitable_water"],
+      "input_isobaric_variables": ["u1000", "u925", "u850", "u700", "u500", "u250", "v1000", "v925", "v850", "v700", "v500", "v250", "z1000", "z925", "z850", "z700", "z500", "z200", "t1000", "t925", "t850", "t700", "t500", "t100", "r1000", "r925", "r850", "r700", "r500", "r100"],
+      "output_variables": ["u10m", "v10m", "t2m", "precip", "cat_snow", "cat_ice", "cat_freez", "cat_rain", "cat_none"],
+      "prob_variables": ["cat_snow", "cat_ice", "cat_freez", "cat_rain"],
+
+      "train": false,
+      "normalize": true,
+      "train_years": [2020, 2021, 2022, 2023],
+      "valid_years": [2024],
+      "hrrr_window": [[1, 1057], [4, 1796]],
+      "sample_shape": [64, 64],
+      "ds_factor": 1,
+      "shard": false,
+      "overfit": false,
+      "use_all": false,
+
+      "dataloader_shuffle": false,
+      "dataloader_num_workers": 0,
+      "dataloader_batch_size": 1
+    }
+  },
+
+  "netG": {
+    "net_type": "msrresnet0_mask",
+    "in_nc": 41,
+    "pos_channels": 4,
+    "out_nc": 9,
+    "nc": 64,
+    "nb": 16,
+    "gc": 32,
+    "ng": 2,
+    "reduction": 16,
+    "act_mode": "R",
+    "upsample_mode": "upconv",
+    "downsample_mode": "strideconv",
+    "init_type": "orthogonal",
+    "init_bn_type": "uniform",
+    "init_gain": 0.2,
+    "graph_shape": [64, 64]
+  },
+
+  "netD": {
+    "net_type": "discriminator_unet",
+    "in_nc": 9,
+    "base_nc": 64,
+
+    "init_type": "orthogonal",
+    "init_bn_type": "uniform",
+    "init_gain": 0.2
+  },
+
+  "train": {
+    "G_lossfn_type": "l1",
+    "G_lossfn_weight": 1e-2,
+    "M_lossfn_weight": 1e-3,
+    "global_lossfn_weight": 1e-3,
+    "F_lossfn_type": "l1",
+    "F_lossfn_weight": 0,
+    "F_feature_layer": 34,
+    "F_weights": 1.0,
+    "F_use_input_norm": true,
+    "F_use_range_norm": false,
+
+    "gan_type": "ragan",
+    "D_lossfn_weight": 5e-3,
+
+    "E_decay": 0.999,
+
+    "D_init_iters": 0,
+
+    "G_optimizer_type": "adam",
+    "G_optimizer_lr": 1e-5,
+    "G_optimizer_wd": 0,
+
+    "D_optimizer_type": "adam",
+    "D_optimizer_lr": 1e-5,
+    "D_optimizer_wd": 0,
+
+    "G_scheduler_type": "MultiStepLR",
+    "G_scheduler_milestones": [3000000, 12000000, 18000000, 30000000],
+    "G_scheduler_gamma": 0.5,
+    "G_optimizer_reuse": true,
+
+    "D_scheduler_type": "MultiStepLR",
+    "D_scheduler_milestones": [3000000, 12000000, 18000000, 30000000],
+    "D_scheduler_gamma": 0.5,
+    "D_optimizer_reuse": true,
+
+    "G_param_strict": true,
+    "D_param_strict": true,
+    "E_param_strict": true,
+
+    "checkpoint_test": 1,
+    "checkpoint_save": 25000,
+    "checkpoint_print": 1,
+    "manual_seed": 3407
+  }
+}

@@ -453,7 +453,7 @@ def main(cfg: DictConfig) -> None:
         )
         use_patch_grad_acc = None
 
-    # Instantiate the loss function
+    # Instantiate the loss 
     if cfg.model.name in (
         "diffusion",
         "patched_diffusion",
