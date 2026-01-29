@@ -12,8 +12,8 @@ sys.path.insert(0, "/home/s448562/physicsnemoKIDS/")
 
 from gnn4cd_model import GNN4CD_Model
 from examples.weather.corrdiff.datasets.hrrrmini import HRRRMiniDataset
-from graphBuilder2 import BipartiteGraph
-from train_test3 import Trainer, Tester
+from examples.weather.ProjektModelle.Emely.graphBuilder import BipartiteGraph
+from examples.weather.ProjektModelle.Emely.train_test import Trainer, Tester
 from torch_geometric.loader import DataLoader
 import torch.nn as nn
 from examples.weather.corrdiff.datasets.cwb import get_zarr_dataset
@@ -60,7 +60,7 @@ if __name__ == "__main__":
         coarse_shape=coarse_shape,
         fine_shape=fine_shape,
         neighbors=4,
-        seq_len=None  ##########!!!!!!!!!
+        seq_len=None  
     )
 
     model = GNN4CD_Model(
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     ).to(device)
 
     args = type('', (), {})()
-    args.epochs = 5
+    args.epochs = 1
     args.alpha = 0.75
     BASE_DIR = Path(__file__).resolve().parent
     args.output_path = str(BASE_DIR / "output")
@@ -90,7 +90,6 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=3, pin_memory=False,persistent_workers=True)
     val_loader   = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=2, pin_memory=False,persistent_workers=True)
     test_loader  = DataLoader(test_dataset, batch_size=16, shuffle=False, num_workers=2, pin_memory=False,persistent_workers=True)
-    # vlt batchsize erhöhen
 
     trainer = Trainer()
     tester = Tester()

@@ -72,7 +72,7 @@ class Trainer:
                 train_loss.update(loss.item(), n=mask.sum().item())
                 wandb.log(
                         {
-                            "train_loss":train_loss.avg,
+                            "train_loss": loss.item(),
                         }, 
                         step=global_step)
          
@@ -126,6 +126,7 @@ class Trainer:
 
 
 
+
 class Tester:
     def __init__(self, device=None):
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -133,43 +134,75 @@ class Tester:
     def save_to_netcdf(self, preds, targets, lon, lat, output_path, times=None):
         netcdf_file = os.path.join(output_path, "test_results.nc")
         
+        print(f"Input shapes - preds: {preds.shape}, targets: {targets.shape}")
+        print(f"Coordinate shapes - lon: {lon.shape}, lat: {lat.shape}")
+        
+        if lon.ndim == 2:
+            n_lat, n_lon = lon.shape
+        else:
+            n_spatial = len(lon)
+            n_lat = n_lon = int(np.sqrt(n_spatial))
+            if n_lat * n_lon != n_spatial:
+                raise ValueError(f"Cannot infer square grid from {n_spatial} points")
+        
+        n_total_points = preds.shape[0]
+        n_vars = preds.shape[1]
+        n_spatial = n_lat * n_lon
+        
+        if n_total_points % n_spatial != 0:
+            raise ValueError(f"Total points {n_total_points} not divisible by spatial grid {n_spatial}")
+        
+        n_samples = n_total_points // n_spatial
+        
+        print(f"Inferred dimensions:")
+        print(f"  n_samples: {n_samples}")
+        print(f"  n_spatial: {n_spatial} ({n_lat} x {n_lon})")
+        print(f"  n_vars: {n_vars}")
+        
         with nc.Dataset(netcdf_file, 'w', format='NETCDF4') as f:
-            n_samples, n_times = preds.shape[0], preds.shape[1] if preds.ndim > 2 else 1
-            n_lat, n_lon = lon.shape[0], lon.shape[1] if lon.ndim > 1 else lon.shape[0]
-            
             f.createDimension('sample', n_samples)
-            f.createDimension('time', n_times)
             f.createDimension('lat', n_lat)
             f.createDimension('lon', n_lon)
+            f.createDimension('variable', n_vars)
             
-            lon_var = f.createVariable('lon', 'f4', ('lon',))
-            lat_var = f.createVariable('lat', 'f4', ('lat',))
-            lon_var[:] = lon.flatten() if lon.ndim > 1 else lon
-            lat_var[:] = lat.flatten() if lat.ndim > 1 else lat
-           
-            time_var = f.createVariable('time', 'f8', ('time',))
-            if times is not None:
-                time_var[:] = times
+            if lon.ndim == 2:
+                lon_var = f.createVariable('lon', 'f4', ('lat', 'lon'))
+                lat_var = f.createVariable('lat', 'f4', ('lat', 'lon'))
+                lon_var[:] = lon
+                lat_var[:] = lat
             else:
-                time_var[:] = np.arange(n_times)
-            time_var.units = 'hours since 2000-01-01 00:00:00'
-            time_var.calendar = 'standard'
-            pred_group = f.createGroup('prediction')
-            truth_group = f.createGroup('truth')
+                lon_var = f.createVariable('lon', 'f4', ('lon',))
+                lat_var = f.createVariable('lat', 'f4', ('lat',))
+
+                lon_2d = lon.reshape(n_lat, n_lon) if lon.size == n_spatial else lon[:n_lon]
+                lat_2d = lat.reshape(n_lat, n_lon) if lat.size == n_spatial else lat[:n_lat]
+                lon_var[:] = lon_2d[0, :] if lon_2d.ndim == 2 else lon_2d
+                lat_var[:] = lat_2d[:, 0] if lat_2d.ndim == 2 else lat_2d
             
-            pred_var = pred_group.createVariable('output', 'f4', ('sample', 'time', 'lat', 'lon'))
-            truth_var = truth_group.createVariable('output', 'f4', ('time', 'lat', 'lon'))
+            lon_var.units = 'degrees_east'
+            lat_var.units = 'degrees_north'
             
-            if preds.ndim == 2:  
-                preds_reshaped = preds.reshape(n_samples, n_times, n_lat, n_lon)
-                targets_reshaped = targets.reshape(n_times, n_lat, n_lon)
-            else:
-                preds_reshaped = preds
-                targets_reshaped = targets
+            preds_reshaped = preds.reshape(n_samples, n_lat, n_lon, n_vars)
+            targets_reshaped = targets.reshape(n_samples, n_lat, n_lon, n_vars)
             
-            pred_var[:] = preds_reshaped
-            truth_var[:] = targets_reshaped
+            var_names = ['maximum_radar_reflectivity', 'temperature_2m', 'eastward_wind_10m', 'northward_wind_10m']  
+            
+            for var_idx in range(n_vars):
+                var_name = var_names[var_idx] if var_idx < len(var_names) else f'var_{var_idx}'
+                
+                pred_var = f.createVariable(f'pred_{var_name}', 'f4', ('sample', 'lat', 'lon'))
+                pred_var[:] = preds_reshaped[:, :, :, var_idx]
+                pred_var.long_name = f'Predicted {var_name}'
+                
+                truth_var = f.createVariable(f'truth_{var_name}', 'f4', ('sample', 'lat', 'lon'))
+                truth_var[:] = targets_reshaped[:, :, :, var_idx]
+                truth_var.long_name = f'True {var_name}'
+            
+            f.description = 'Weather downscaling model predictions'
+            f.history = f'Created {np.datetime64("now")}'
+            f.source = 'GNN4CD downscaling model'
         
+        print(f"Saved netCDF file: {netcdf_file}")
         return netcdf_file
 
     def test(self, model, dataloader, loss_fn, output_path="./output", lon=None, lat=None):
@@ -184,24 +217,28 @@ class Tester:
         with torch.no_grad():
             for graph in tqdm(dataloader, desc="Test", leave=True):
                 graph = graph.to(self.device)
-                y_pred = model(graph)
-                y = graph['high'].y
+                y_pred = model(graph) 
+                y = graph['high'].y   
                 mask = graph['high'].train_mask
+                
                 loss = loss_fn(y_pred[mask], y[mask])
                 loss_meter.update(loss.item(), n=mask.sum().item())
+                
                 preds.append(y_pred[mask].cpu().numpy())
                 targets.append(y[mask].cpu().numpy())
 
-        preds = np.concatenate(preds, axis=0)
-        targets = np.concatenate(targets, axis=0)
+        preds = np.concatenate(preds, axis=0)  
+        targets = np.concatenate(targets, axis=0)  
         
-        corr = pattern_correlation(preds.flatten(), targets.flatten())
-        print(f"Pattern Correlation: {corr:.4f}")
+        print(f"Concatenated shapes - preds: {preds.shape}, targets: {targets.shape}")
+        
+        for var_idx in range(preds.shape[1]):
+            corr = pattern_correlation(preds[:, var_idx], targets[:, var_idx])
+            print(f"Pattern Correlation (var {var_idx}): {corr:.4f}")
 
-        np.savez(os.path.join(output_path, "test_outputs.npz"),prediction=preds,truth=targets)
+        np.savez(os.path.join(output_path, "test_outputs.npz"), prediction=preds, truth=targets)
 
         netcdf_file = self.save_to_netcdf(preds, targets, lon, lat, output_path)
-       
+    
         print(f"Final Test Loss: {loss_meter.avg:.6f}")
         return preds, targets, loss_meter.avg
-
