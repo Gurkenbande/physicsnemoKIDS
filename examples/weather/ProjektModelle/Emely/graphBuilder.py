@@ -17,14 +17,12 @@ class BipartiteGraph(torch.utils.data.Dataset):
         y_c = np.linspace(0, 1, coarse_shape[0])
         x_c = np.linspace(0, 1, coarse_shape[1])
         yy_c, xx_c = np.meshgrid(y_c, x_c, indexing="ij")
-        self.coarse_positions = torch.tensor(np.stack([yy_c.flatten(), xx_c.flatten()], axis=1),
-                                             dtype=torch.float32, device=self.device)
+        self.coarse_positions = torch.tensor(np.stack([yy_c.flatten(), xx_c.flatten()], axis=1),dtype=torch.float32, device=self.device)
 
         y_f = np.linspace(0, 1, fine_shape[0])
         x_f = np.linspace(0, 1, fine_shape[1])
         yy_f, xx_f = np.meshgrid(y_f, x_f, indexing="ij")
-        self.fine_positions = torch.tensor(np.stack([yy_f.flatten(), xx_f.flatten()], axis=1),
-                                           dtype=torch.float32, device=self.device)
+        self.fine_positions = torch.tensor(np.stack([yy_f.flatten(), xx_f.flatten()], axis=1),dtype=torch.float32, device=self.device)
         self.x_high_template = torch.zeros((self.n_fine, 4),dtype=torch.float32,device=self.device)
 
         self.build_edges()
@@ -59,7 +57,13 @@ class BipartiteGraph(torch.utils.data.Dataset):
         hi = hi.flatten()
         wi = wi.flatten()
         edges = []
-        neighbor_offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # 4 neighbors
+        
+        #neighbor_offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)] # 4 neighbors
+        neighbor_offsets = [
+                    (-1, 0), (1, 0), (0, -1), (0, 1),     
+                    (-1, -1), (-1, 1), (1, -1), (1, 1)   
+                ]  # 8 neighbors 
+        
         for dh, dw in neighbor_offsets:
             nh = hi + dh
             nw = wi + dw

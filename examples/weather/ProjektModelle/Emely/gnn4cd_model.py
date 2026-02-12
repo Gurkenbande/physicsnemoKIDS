@@ -64,9 +64,9 @@ class GNN4CD_Model(nn.Module):
         if inference:
             return x_high
 
-        return x_high'''
+        return x_high
 
-
+'''
 import torch.nn as nn
 import torch_geometric.nn as geometric_nn
 from torch_geometric.nn import GATv2Conv, GraphConv

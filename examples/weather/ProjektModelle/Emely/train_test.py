@@ -7,10 +7,9 @@ import netCDF4 as nc
 from metrics import AverageMeter
 from tqdm import tqdm
 from examples.weather.corrdiff.inference.plot_single_sample import (
-    main as plot_main,
     pattern_correlation
 )
-
+from pathlib import Path
 import wandb
 
 class Trainer:
@@ -55,8 +54,8 @@ class Trainer:
         model.to(self.device)
         train_losses, val_losses = [], []
         global_step = 0
-        for epoch in range(epoch_start, epoch_start + args.epochs):
-
+        
+        for epoch in range(epoch_start, args.epochs):
             model.train()
             train_loss = AverageMeter()
             train_bar = tqdm(dataloader_train, desc=f"Epoch {epoch+1} | Train", leave=False)
@@ -96,7 +95,6 @@ class Trainer:
                     loss = loss_fn(y_pred[mask], y[mask])
                     
                     val_loss.update(loss.item(), n=mask.sum().item())
-
                     val_bar.set_postfix(val=f"{val_loss.avg:.4f}")
 
                     if epoch % log_freq == 0:
@@ -104,7 +102,7 @@ class Trainer:
                         targets.append(y[mask].detach())
             wandb.log(
                         {
-                            "val_loss":val_loss.avg,
+                            "val_loss": val_loss.avg,
                         }, 
                         step=global_step)
                     
@@ -121,6 +119,20 @@ class Trainer:
                 else:
                     lr_scheduler.step()
 
+            checkpoint_path = Path(args.output_path) / "checkpoint.pt"
+
+            torch.save({
+                "epoch": epoch + 1,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": (
+                    lr_scheduler.state_dict() if lr_scheduler is not None else None
+                ),
+                "train_losses": train_losses,
+                "val_losses": val_losses,
+            }, checkpoint_path)
+
+
         self._plot_loss_curves(train_losses, val_losses, args)
 
 
@@ -128,36 +140,44 @@ class Trainer:
 
 
 class Tester:
-    def __init__(self, device=None):
+    def __init__(self, device=None, dataset=None):
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.dataset = dataset 
 
     def save_to_netcdf(self, preds, targets, lon, lat, output_path, times=None):
         netcdf_file = os.path.join(output_path, "test_results.nc")
         
-        print(f"Input shapes - preds: {preds.shape}, targets: {targets.shape}")
-        print(f"Coordinate shapes - lon: {lon.shape}, lat: {lat.shape}")
+        if os.path.exists(netcdf_file):
+            os.remove(netcdf_file)
+
+        n_total_points = preds.shape[0]
+        n_vars = preds.shape[1]
         
         if lon.ndim == 2:
             n_lat, n_lon = lon.shape
+        elif lon.ndim == 1:
+            n_lon = len(lon)
+            n_lat = len(lat)
         else:
-            n_spatial = len(lon)
-            n_lat = n_lon = int(np.sqrt(n_spatial))
-            if n_lat * n_lon != n_spatial:
-                raise ValueError(f"Cannot infer square grid from {n_spatial} points")
+            raise ValueError(f"Unexpected lon dimensions: {lon.shape}")
         
-        n_total_points = preds.shape[0]
-        n_vars = preds.shape[1]
         n_spatial = n_lat * n_lon
         
         if n_total_points % n_spatial != 0:
-            raise ValueError(f"Total points {n_total_points} not divisible by spatial grid {n_spatial}")
         
-        n_samples = n_total_points // n_spatial
-        
-        print(f"Inferred dimensions:")
-        print(f"  n_samples: {n_samples}")
-        print(f"  n_spatial: {n_spatial} ({n_lat} x {n_lon})")
-        print(f"  n_vars: {n_vars}")
+            n_samples = n_total_points // n_spatial
+            remainder = n_total_points % n_spatial
+            
+            if remainder > 0:
+                n_complete_samples = n_samples
+                n_points_to_use = n_complete_samples * n_spatial
+                print(f"Truncating to {n_complete_samples} complete samples ({n_points_to_use} points)")
+                preds = preds[:n_points_to_use]
+                targets = targets[:n_points_to_use]
+                n_total_points = n_points_to_use
+                n_samples = n_complete_samples
+        else:
+            n_samples = n_total_points // n_spatial
         
         with nc.Dataset(netcdf_file, 'w', format='NETCDF4') as f:
             f.createDimension('sample', n_samples)
@@ -173,19 +193,21 @@ class Tester:
             else:
                 lon_var = f.createVariable('lon', 'f4', ('lon',))
                 lat_var = f.createVariable('lat', 'f4', ('lat',))
-
-                lon_2d = lon.reshape(n_lat, n_lon) if lon.size == n_spatial else lon[:n_lon]
-                lat_2d = lat.reshape(n_lat, n_lon) if lat.size == n_spatial else lat[:n_lat]
-                lon_var[:] = lon_2d[0, :] if lon_2d.ndim == 2 else lon_2d
-                lat_var[:] = lat_2d[:, 0] if lat_2d.ndim == 2 else lat_2d
+                lon_var[:] = lon
+                lat_var[:] = lat
             
             lon_var.units = 'degrees_east'
             lat_var.units = 'degrees_north'
             
             preds_reshaped = preds.reshape(n_samples, n_lat, n_lon, n_vars)
             targets_reshaped = targets.reshape(n_samples, n_lat, n_lon, n_vars)
-            
-            var_names = ['maximum_radar_reflectivity', 'temperature_2m', 'eastward_wind_10m', 'northward_wind_10m']  
+
+            if self.dataset is not None:
+                for v in range(n_vars):
+                    preds_reshaped[..., v] = self.dataset.denormalize_output(preds_reshaped[..., v][..., None],channels=[v])[..., 0]
+                    targets_reshaped[..., v] = self.dataset.denormalize_output(targets_reshaped[..., v][..., None],channels=[v])[..., 0]
+
+            var_names = ['maximum_radar_reflectivity', 'temperature_2m', 'eastward_wind_10m', 'northward_wind_10m']
             
             for var_idx in range(n_vars):
                 var_name = var_names[var_idx] if var_idx < len(var_names) else f'var_{var_idx}'
@@ -202,7 +224,6 @@ class Tester:
             f.history = f'Created {np.datetime64("now")}'
             f.source = 'GNN4CD downscaling model'
         
-        print(f"Saved netCDF file: {netcdf_file}")
         return netcdf_file
 
     def test(self, model, dataloader, loss_fn, output_path="./output", lon=None, lat=None):
@@ -230,15 +251,11 @@ class Tester:
         preds = np.concatenate(preds, axis=0)  
         targets = np.concatenate(targets, axis=0)  
         
-        print(f"Concatenated shapes - preds: {preds.shape}, targets: {targets.shape}")
-        
         for var_idx in range(preds.shape[1]):
             corr = pattern_correlation(preds[:, var_idx], targets[:, var_idx])
             print(f"Pattern Correlation (var {var_idx}): {corr:.4f}")
 
-        np.savez(os.path.join(output_path, "test_outputs.npz"), prediction=preds, truth=targets)
-
-        netcdf_file = self.save_to_netcdf(preds, targets, lon, lat, output_path)
+        self.save_to_netcdf(preds, targets, lon, lat, output_path)
     
         print(f"Final Test Loss: {loss_meter.avg:.6f}")
         return preds, targets, loss_meter.avg

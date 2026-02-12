@@ -5,9 +5,9 @@
 #SBATCH -p standard
 #SBATCH --gres=gpu:1
 #SBATCH --tmp=500g
-#SBATCH --mem=32G  
-#SBATCH --cpus-per-task=8
-
+#SBATCH --mem=128G  
+#SBATCH --cpus-per-task=32
+#SBATCH --qos=normal
 
 
 source /home/s448562/lab4/bin/activate  
