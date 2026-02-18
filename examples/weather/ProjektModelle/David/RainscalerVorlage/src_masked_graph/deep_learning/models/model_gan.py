@@ -238,6 +238,7 @@ class ModelGAN(ModelBase):
         mask_label = F.interpolate(H_tp, size=self.L.shape[-2:], mode="area")  # (B,1,8,8)
         tp_idx = 3
         H_tp = self.H[:, tp_idx:tp_idx+1]  # (B,1,HR,HR)
+        #TODO:chek warum interpolate
         self.mask_label = F.interpolate(H_tp, size=self.L.shape[-2:], mode="area")
         self.mask_label = (self.mask_label > 0).float()
 

@@ -243,7 +243,6 @@ class MSRResNet0(nn.Module):
         else:
             x_data = x
             x_pos = None
-
         mask = self.unet(x_data)
                 
         #difference = self.pool(hr) - x
@@ -251,7 +250,8 @@ class MSRResNet0(nn.Module):
         weights = self.sigmoid(1000*mask) #+ bias
         #weights = self.softshrink(difference)
 
-        x_data = x_data * weights
+        #TODO
+        # x_data = x_data * weights
 
         m = torch.where(weights >= 0.5, 1, 0)
 

@@ -10,6 +10,8 @@ import logging
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import torch
+import torch.nn.functional as F
+from pathlib import Path
 
 from utils import utils_logger
 from utils import utils_image as util
@@ -183,7 +185,13 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
     # ----------------------------------------
     for phase, dataset_opt in opt['datasets'].items():
         if phase == 'train':
-            train_set = define_Dataset(dataset_opt)
+            dataset_type = str(dataset_opt.get('dataset_type', '')).lower()
+            if dataset_type in ['cwb', 'cwb_nemo']:
+                from examples.weather.corrdiff.datasets.cwb import get_zarr_dataset
+                data_path = Path(dataset_opt['data_path']).expanduser()
+                train_set = get_zarr_dataset(data_path=data_path)
+            else:
+                train_set = define_Dataset(dataset_opt)
             train_size = int(math.ceil(len(train_set) / dataset_opt['dataloader_batch_size']))
             if opt['rank'] == 0:
                 logger.info('Number of train images: {:,d}, iters: {:,d}'.format(len(train_set), train_size))
@@ -205,7 +213,13 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
                                           pin_memory=True)
 
         elif phase == 'test':
-            test_set = define_Dataset(dataset_opt)
+            dataset_type = str(dataset_opt.get('dataset_type', '')).lower()
+            if dataset_type in ['cwb', 'cwb_nemo']:
+                from examples.weather.corrdiff.datasets.cwb import get_zarr_dataset
+                data_path = Path(dataset_opt['data_path']).expanduser()
+                test_set = get_zarr_dataset(data_path=data_path)
+            else:
+                test_set = define_Dataset(dataset_opt)
             test_loader = DataLoader(test_set, batch_size=1,
                                      shuffle=False, num_workers=dataset_opt['dataloader_num_workers'],
                                      drop_last=False, pin_memory=True)
@@ -251,11 +265,32 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
             # -------------------------------
             # 2) feed patch pairs
             # -------------------------------
+            if isinstance(train_data, (list, tuple)) and len(train_data) >= 2:
+                img_clean = train_data[0].float()
+                img_lr = train_data[1].float()
+                if opt['scale'] > 1:
+                    if img_lr.dim() == 3:
+                        img_lr = img_lr.unsqueeze(0)
+                        lr_h = img_lr.shape[-2] // opt['scale']
+                        lr_w = img_lr.shape[-1] // opt['scale']
+                        img_lr = F.interpolate(img_lr, size=(lr_h, lr_w), mode="area")
+                        img_lr = img_lr.squeeze(0)
+                    elif img_lr.dim() == 4:
+                        lr_h = img_lr.shape[-2] // opt['scale']
+                        lr_w = img_lr.shape[-1] // opt['scale']
+                        img_lr = F.interpolate(img_lr, size=(lr_h, lr_w), mode="area")
+                train_data = {
+                    "L": img_lr,
+                    "H": img_clean,
+                    "L_path": [opt['datasets']['train']['data_path']],
+                    "H_path": [opt['datasets']['train']['data_path']],
+                }
             model.feed_data(train_data)
 
             # -------------------------------
             # 3) optimize parameters
             # -------------------------------
+            #TODO 
             model.optimize_parameters(current_step)
 
 
@@ -298,6 +333,26 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
 
                 for test_data in test_loader:
                     idx += 1
+                    if isinstance(test_data, (list, tuple)) and len(test_data) >= 2:
+                        img_clean = test_data[0].float()
+                        img_lr = test_data[1].float()
+                        if opt['scale'] > 1:
+                            if img_lr.dim() == 3:
+                                img_lr = img_lr.unsqueeze(0)
+                                lr_h = img_lr.shape[-2] // opt['scale']
+                                lr_w = img_lr.shape[-1] // opt['scale']
+                                img_lr = F.interpolate(img_lr, size=(lr_h, lr_w), mode="area")
+                                img_lr = img_lr.squeeze(0)
+                            elif img_lr.dim() == 4:
+                                lr_h = img_lr.shape[-2] // opt['scale']
+                                lr_w = img_lr.shape[-1] // opt['scale']
+                                img_lr = F.interpolate(img_lr, size=(lr_h, lr_w), mode="area")
+                        test_data = {
+                            "L": img_lr,
+                            "H": img_clean,
+                            "L_path": [opt['datasets']['test']['data_path']],
+                            "H_path": [opt['datasets']['test']['data_path']],
+                        }
                     image_name_ext = os.path.basename(test_data['L_path'][0])
                     img_name, ext = os.path.splitext(image_name_ext)
                     # img_dir = opt['path']['images']
