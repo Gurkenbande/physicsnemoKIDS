@@ -7,6 +7,7 @@ import logging
 import numpy as np
 import torch
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 sys.path.insert(0, "../deep_learning")
 
@@ -109,6 +110,63 @@ def _downsample_lr(x, scale):
     return x
 
 
+def _log_internal_x_plots(
+    model,
+    dataset,
+    scale,
+    num_images,
+    plots_dir,
+    step,
+):
+    if num_images <= 0:
+        return
+    model.netG.eval()
+    val_images = []
+    val_predictions = []
+
+    with torch.no_grad():
+        for idx in range(num_images):
+            img_clean, img_lr = dataset[idx]
+            img_lr = _downsample_lr(_as_tensor(img_lr), scale).unsqueeze(0).to(model.device)
+            img_clean = _as_tensor(img_clean).unsqueeze(0).to(model.device)
+            model.feed_data({"L": img_lr, "H": img_clean}, need_H=True)
+            model.test()
+
+            bare = model.get_bare_model(model.netG)
+            internal_x = getattr(bare, "last_x", None)
+            if internal_x is None:
+                continue
+
+            x_map = internal_x[0].mean(dim=0).detach().cpu()
+            if model.E.shape[1] > 3:
+                out_map = model.E.detach()[0, 3].cpu()
+            else:
+                out_map = model.E.detach()[0, 0].cpu()
+
+            val_images.append(out_map)
+            val_predictions.append(x_map)
+
+    if not val_images:
+        model.netG.train()
+        return
+
+    fig, axs = plt.subplots(2, len(val_images), figsize=(20, 8))
+    for i in range(len(val_images)):
+        vmin = min(val_images[i].min(), val_predictions[i].min())
+        vmax = max(val_images[i].max(), val_predictions[i].max())
+        axs[0, i].imshow(val_images[i].squeeze().numpy(), cmap="inferno", vmin=vmin, vmax=vmax)
+        axs[1, i].imshow(val_predictions[i].squeeze().numpy(), cmap="inferno", vmin=vmin, vmax=vmax)
+        axs[0, i].axis("off")
+        axs[1, i].axis("off")
+
+    os.makedirs(plots_dir, exist_ok=True)
+    out_path = os.path.join(plots_dir, f"internal_x_step_{step}.png")
+    plt.savefig(out_path, bbox_inches="tight")
+    wandb.log({"internal_x": wandb.Image(fig)}, step=step)
+    plt.close(fig)
+    model.netG.train()
+
+
 def main(json_path="../deep_learning/options/rainscaler_config.json"):
     parser = argparse.ArgumentParser()
     parser.add_argument("--opt", type=str, default=json_path, help="Path to option JSON file.")
@@ -152,8 +210,7 @@ def main(json_path="../deep_learning/options/rainscaler_config.json"):
         logger = logging.getLogger(logger_name)
         logger.info(option.dict2str(opt))
 
-    if opt["rank"] == 0:
-        wandb.init(project="rainscale")
+    wandb.init(project="rainscale")
 
     seed = opt["train"]["manual_seed"]
     if seed is None:
@@ -197,6 +254,7 @@ def main(json_path="../deep_learning/options/rainscaler_config.json"):
     )
 
     train_steps_per_epoch = int(math.ceil(len(train_set) / batch_size))
+    print(train_steps_per_epoch)
     test_steps = int(math.ceil(len(test_set) / test_opt["dataloader_batch_size"])) if test_opt else 0
 
     if opt["rank"] == 0:
@@ -218,7 +276,25 @@ def main(json_path="../deep_learning/options/rainscaler_config.json"):
     for epoch in range(epochs):
         for i in range(train_steps_per_epoch):
             current_step += 1
+            print(current_step, flush=True)
             cur_nimg += total_batch_size
+
+            if (
+                opt["rank"] == 0
+                and i == 0
+                and opt["train"].get("plot_internal_x", False)
+            ):
+                num_images = int(opt["train"].get("plot_internal_x_n", 10))
+                plot_dataset = test_set if test_opt else train_set
+                plots_dir = os.path.join(os.path.dirname(__file__), "plots")
+                _log_internal_x_plots(
+                    model,
+                    plot_dataset,
+                    opt["scale"],
+                    num_images,
+                    plots_dir,
+                    cur_nimg,
+                )
 
             img_clean, img_lr, *lead_time = next(train_iter)
             img_lr = _downsample_lr(_as_tensor(img_lr), opt["scale"])

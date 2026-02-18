@@ -230,7 +230,8 @@ class MSRResNet0(nn.Module):
         unet_in_nc = in_nc - pos_channels
         self.unet = UNet(unet_in_nc, 1)
         self.sigmoid = nn.Sigmoid()
-        
+        self.return_features = False
+        self.last_x = None
 
     def forward(self, x):
         """
@@ -264,7 +265,10 @@ class MSRResNet0(nn.Module):
             x = x_data
 
         x = self.model(x) #(2,96,64,64)
-        
+        print("x shape:", tuple(x.shape), flush=True)
+        self.last_x = x.detach()
+        feat = x
+
         #h_m = torch.where(mask >= 0.5, 1, 0) #c #we should also think about strong underestimation in LR! >0.01 and < 100?
 
         
@@ -300,6 +304,8 @@ class MSRResNet0(nn.Module):
         supervised_nodes = torch.kron(m, torch.ones((sf, sf), device=m.device)) #c
         mask = mask.to(torch.float32)
 
+        if self.return_features:
+            return x, supervised_nodes, mask, feat
         return x, supervised_nodes, mask #c
 # --------------------------------------------
 # modified SRResNet v0.1

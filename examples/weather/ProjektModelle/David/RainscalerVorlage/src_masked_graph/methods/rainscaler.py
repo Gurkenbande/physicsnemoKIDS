@@ -12,6 +12,7 @@ from torch.utils.data.distributed import DistributedSampler
 import torch
 import torch.nn.functional as F
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 from utils import utils_logger
 from utils import utils_image as util
@@ -85,6 +86,84 @@ def _add_corrdiff_root():
     return None
 
 _add_corrdiff_root()
+
+def _as_tensor(x):
+    if isinstance(x, torch.Tensor):
+        return x.float()
+    return torch.from_numpy(x).float()
+
+
+def _downsample_lr(x, scale):
+    if scale <= 1:
+        return x
+    if x.dim() == 3:
+        x = x.unsqueeze(0)
+        lr_h = x.shape[-2] // scale
+        lr_w = x.shape[-1] // scale
+        x = F.interpolate(x, size=(lr_h, lr_w), mode="area")
+        return x.squeeze(0)
+    if x.dim() == 4:
+        lr_h = x.shape[-2] // scale
+        lr_w = x.shape[-1] // scale
+        return F.interpolate(x, size=(lr_h, lr_w), mode="area")
+    return x
+
+
+def _log_internal_x_plots(
+    model,
+    dataset,
+    scale,
+    num_images,
+    plots_dir,
+    step,
+):
+    if num_images <= 0:
+        return
+    model.netG.eval()
+    val_images = []
+    val_predictions = []
+
+    with torch.no_grad():
+        for idx in range(num_images):
+            img_clean, img_lr = dataset[idx]
+            img_lr = _downsample_lr(_as_tensor(img_lr), scale).unsqueeze(0).to(model.device)
+            img_clean = _as_tensor(img_clean).unsqueeze(0).to(model.device)
+            model.feed_data({"L": img_lr, "H": img_clean}, need_H=True)
+            model.test()
+
+            bare = model.get_bare_model(model.netG)
+            internal_x = getattr(bare, "last_x", None)
+            if internal_x is None:
+                continue
+
+            x_map = internal_x[0].mean(dim=0).detach().cpu()
+            if model.E.shape[1] > 3:
+                out_map = model.E.detach()[0, 3].cpu()
+            else:
+                out_map = model.E.detach()[0, 0].cpu()
+
+            val_images.append(out_map)
+            val_predictions.append(x_map)
+
+    if not val_images:
+        model.netG.train()
+        return
+
+    fig, axs = plt.subplots(2, len(val_images), figsize=(20, 8))
+    for i in range(len(val_images)):
+        vmin = min(val_images[i].min(), val_predictions[i].min())
+        vmax = max(val_images[i].max(), val_predictions[i].max())
+        axs[0, i].imshow(val_images[i].squeeze().numpy(), cmap="inferno", vmin=vmin, vmax=vmax)
+        axs[1, i].imshow(val_predictions[i].squeeze().numpy(), cmap="inferno", vmin=vmin, vmax=vmax)
+        axs[0, i].axis("off")
+        axs[1, i].axis("off")
+
+    os.makedirs(plots_dir, exist_ok=True)
+    out_path = os.path.join(plots_dir, f"internal_x_step_{step}.png")
+    plt.savefig(out_path, bbox_inches="tight")
+    wandb.log({"internal_x": wandb.Image(fig)}, step=step)
+    plt.close(fig)
+    model.netG.train()
 
 
 def main(json_path='../deep_learning/options/rainscaler_config.json'):
@@ -223,6 +302,7 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
             test_loader = DataLoader(test_set, batch_size=1,
                                      shuffle=False, num_workers=dataset_opt['dataloader_num_workers'],
                                      drop_last=False, pin_memory=True)
+            print(f"Test steps per eval: {len(test_loader)}", flush=True)
         else:
             raise NotImplementedError("Phase [%s] is not recognized." % phase)
 
@@ -256,14 +336,34 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
         for i, train_data in enumerate(train_loader):
 
             current_step += 1
-            
+            print(f"Train Step is {current_step}")
             # -------------------------------
-            # 1) update learning rate
+            # 1) optional internal_x plots
+            # -------------------------------
+            if (
+                opt['rank'] == 0
+                and i == 0
+                and opt['train'].get('plot_internal_x', False)
+            ):
+                num_images = int(opt['train'].get('plot_internal_x_n', 10))
+                plot_dataset = test_set if 'test_set' in locals() else train_set
+                plots_dir = os.path.join(os.path.dirname(__file__), 'plots')
+                _log_internal_x_plots(
+                    model,
+                    plot_dataset,
+                    opt['scale'],
+                    num_images,
+                    plots_dir,
+                    current_step,
+                )
+
+            # -------------------------------
+            # 2) update learning rate
             # -------------------------------
             model.update_learning_rate(current_step)
 
             # -------------------------------
-            # 2) feed patch pairs
+            # 3) feed patch pairs
             # -------------------------------
             if isinstance(train_data, (list, tuple)) and len(train_data) >= 2:
                 img_clean = train_data[0].float()
@@ -308,9 +408,6 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
                 logger.info(message)
 
                 wandb.log(logs, step=current_step)
-                print(current_step)
-
-
             # -------------------------------
             # 5) save model
             # -------------------------------
@@ -321,103 +418,104 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
             # -------------------------------
             # 6) testing
             # -------------------------------
-            if current_step % opt['train']['checkpoint_test'] == 0 and opt['rank'] == 0:
+            # TODO enable testing again
+            # if current_step % opt['train']['checkpoint_test'] == 0 and opt['rank'] == 0:
 
-                avg_psnr = 0.0
-                avg_mae = 0.0
-                avg_ssim = 0.0
-                psnr_count = 0
-                mae_count = 0
-                ssim_count = 0
-                idx = 0
+            #     avg_psnr = 0.0
+            #     avg_mae = 0.0
+            #     avg_ssim = 0.0
+            #     psnr_count = 0
+            #     mae_count = 0
+            #     ssim_count = 0
+            #     idx = 0
 
-                for test_data in test_loader:
-                    idx += 1
-                    if isinstance(test_data, (list, tuple)) and len(test_data) >= 2:
-                        img_clean = test_data[0].float()
-                        img_lr = test_data[1].float()
-                        if opt['scale'] > 1:
-                            if img_lr.dim() == 3:
-                                img_lr = img_lr.unsqueeze(0)
-                                lr_h = img_lr.shape[-2] // opt['scale']
-                                lr_w = img_lr.shape[-1] // opt['scale']
-                                img_lr = F.interpolate(img_lr, size=(lr_h, lr_w), mode="area")
-                                img_lr = img_lr.squeeze(0)
-                            elif img_lr.dim() == 4:
-                                lr_h = img_lr.shape[-2] // opt['scale']
-                                lr_w = img_lr.shape[-1] // opt['scale']
-                                img_lr = F.interpolate(img_lr, size=(lr_h, lr_w), mode="area")
-                        test_data = {
-                            "L": img_lr,
-                            "H": img_clean,
-                            "L_path": [opt['datasets']['test']['data_path']],
-                            "H_path": [opt['datasets']['test']['data_path']],
-                        }
-                    image_name_ext = os.path.basename(test_data['L_path'][0])
-                    img_name, ext = os.path.splitext(image_name_ext)
-                    # img_dir = opt['path']['images']
-                    # img_dir = os.path.join(opt['path']['images'], img_name)
-                    # util.mkdir(img_dir)
+            #     for test_data in test_loader:
+            #         idx += 1
+            #         if isinstance(test_data, (list, tuple)) and len(test_data) >= 2:
+            #             img_clean = test_data[0].float()
+            #             img_lr = test_data[1].float()
+            #             if opt['scale'] > 1:
+            #                 if img_lr.dim() == 3:
+            #                     img_lr = img_lr.unsqueeze(0)
+            #                     lr_h = img_lr.shape[-2] // opt['scale']
+            #                     lr_w = img_lr.shape[-1] // opt['scale']
+            #                     img_lr = F.interpolate(img_lr, size=(lr_h, lr_w), mode="area")
+            #                     img_lr = img_lr.squeeze(0)
+            #                 elif img_lr.dim() == 4:
+            #                     lr_h = img_lr.shape[-2] // opt['scale']
+            #                     lr_w = img_lr.shape[-1] // opt['scale']
+            #                     img_lr = F.interpolate(img_lr, size=(lr_h, lr_w), mode="area")
+            #             test_data = {
+            #                 "L": img_lr,
+            #                 "H": img_clean,
+            #                 "L_path": [opt['datasets']['test']['data_path']],
+            #                 "H_path": [opt['datasets']['test']['data_path']],
+            #             }
+            #         image_name_ext = os.path.basename(test_data['L_path'][0])
+            #         img_name, ext = os.path.splitext(image_name_ext)
+            #         # img_dir = opt['path']['images']
+            #         # img_dir = os.path.join(opt['path']['images'], img_name)
+            #         # util.mkdir(img_dir)
 
-                    model.feed_data(test_data)
-                    model.test()
+            #         model.feed_data(test_data)
+            #         model.test()
 
-                    visuals = model.current_visuals()
-                    E_img = util.tensor2uint_regression(visuals['E'])
-                    H_img = util.tensor2uint_regression(visuals['H'])
+            #         visuals = model.current_visuals()
+            #         E_img = util.tensor2uint_regression(visuals['E'])
+            #         H_img = util.tensor2uint_regression(visuals['H'])
 
-                    # -----------------------
-                    # save estimated image E
-                    # -----------------------
-                    # save_img_path = os.path.join(img_dir, '{:s}'.format(img_name))
-                    # save_img_path_p = os.path.join(img_dir, '{:s}.png'.format(img_name))
-                    #util.imsave(E_img * 140.0 * 255, save_img_path)
-                    # util.imsave_plt(E_img, save_img_path_p)
-                    # np.save(save_img_path,E_img)
+            #         # -----------------------
+            #         # save estimated image E
+            #         # -----------------------
+            #         # save_img_path = os.path.join(img_dir, '{:s}'.format(img_name))
+            #         # save_img_path_p = os.path.join(img_dir, '{:s}.png'.format(img_name))
+            #         #util.imsave(E_img * 140.0 * 255, save_img_path)
+            #         # util.imsave_plt(E_img, save_img_path_p)
+            #         # np.save(save_img_path,E_img)
 
-                   # -----------------------
-                    # calculate PSNR
-                    # -----------------------
-                    current_psnr,current_mae = util.calculate_score(E_img, H_img, border=border)
+            #        # -----------------------
+            #         # calculate PSNR
+            #         # -----------------------
+            #         current_psnr,current_mae = util.calculate_score(E_img, H_img, border=border)
 
-                    current_ssim = util.calculate_ssim(E_img, H_img, border=border)
-                    psnr_str = "nan" if current_psnr is None else f"{current_psnr:<4.2f}"
-                    ssim_str = "nan" if current_ssim is None else f"{current_ssim:<7.5f}"
-                    mae_str  = "nan" if current_mae is None else f"{current_mae*100:<7.5f}"
+            #         current_ssim = util.calculate_ssim(E_img, H_img, border=border)
+            #         psnr_str = "nan" if current_psnr is None else f"{current_psnr:<4.2f}"
+            #         ssim_str = "nan" if current_ssim is None else f"{current_ssim:<7.5f}"
+            #         mae_str  = "nan" if current_mae is None else f"{current_mae*100:<7.5f}"
 
-                    logger.info('{:->4d}--> {:>10s} | {}dB | {} | {} '.format(idx, image_name_ext, psnr_str, mae_str, ssim_str))
+            #         logger.info('{:->4d}--> {:>10s} | {}dB | {} | {} '.format(idx, image_name_ext, psnr_str, mae_str, ssim_str))
 
-                    wandb.log(
-                        {
-                            "psnr_db": current_psnr,
-                            "mae": current_mae * 100,
-                            "ssim": current_ssim,
-                        },
-                        step=idx,
-                    )
+            #         wandb.log(
+            #             {
+            #                 "test_psnr_db": current_psnr,
+            #                 "test_mae": current_mae * 100,
+            #                 "test_ssim": current_ssim,
+            #             },
+            #             step=idx,
+            #         )
 
-                    print(idx)
+            #         print(f"Test Step is:{idx}")
 
-                    if current_psnr is not None:
-                        avg_psnr += current_psnr
-                        psnr_count += 1
-                    if current_mae is not None:
-                        avg_mae += current_mae
-                        mae_count += 1
-                    if current_ssim is not None:
-                        avg_ssim += current_ssim
-                        ssim_count += 1
-                    avg_psnr = avg_psnr / psnr_count if psnr_count > 0 else float("nan")
-                    avg_mae  = avg_mae  / mae_count  if mae_count  > 0 else float("nan")
-                    avg_ssim = avg_ssim / ssim_count if ssim_count > 0 else float("nan")
+            #         if current_psnr is not None:
+            #             avg_psnr += current_psnr
+            #             psnr_count += 1
+            #         if current_mae is not None:
+            #             avg_mae += current_mae
+            #             mae_count += 1
+            #         if current_ssim is not None:
+            #             avg_ssim += current_ssim
+            #             ssim_count += 1
+            #         avg_psnr = avg_psnr / psnr_count if psnr_count > 0 else float("nan")
+            #         avg_mae  = avg_mae  / mae_count  if mae_count  > 0 else float("nan")
+            #         avg_ssim = avg_ssim / ssim_count if ssim_count > 0 else float("nan")
 
 
-                avg_psnr = avg_psnr / idx
-                avg_mae = avg_mae / idx
-                avg_ssim = avg_ssim / idx
+            #     avg_psnr = avg_psnr / idx
+            #     avg_mae = avg_mae / idx
+            #     avg_ssim = avg_ssim / idx
 
-                # testing log
-                logger.info('<epoch:{:3d}, iter:{:8,d}, Average PSNR : {:<.2f}dB, Average MAE : {:<.5f} , Average SSIM : {:<.5f}\n'.format(epoch, current_step, avg_psnr, avg_mae*100, avg_ssim))
+            #     # testing log
+            #     logger.info('<epoch:{:3d}, iter:{:8,d}, Average PSNR : {:<.2f}dB, Average MAE : {:<.5f} , Average SSIM : {:<.5f}\n'.format(epoch, current_step, avg_psnr, avg_mae*100, avg_ssim))
 
 if __name__ == '__main__':
     main()

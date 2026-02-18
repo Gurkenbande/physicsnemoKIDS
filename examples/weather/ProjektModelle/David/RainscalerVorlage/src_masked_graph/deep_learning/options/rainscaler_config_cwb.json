@@ -36,7 +36,7 @@
       "ds_factor": 1,
 
       "dataloader_shuffle": true,
-      "dataloader_num_workers": 8,
+      "dataloader_num_workers": 2,
       "dataloader_batch_size": 32
     },
 
@@ -135,5 +135,8 @@
     "checkpoint_save": 25000,
     "checkpoint_print": 1,
     "manual_seed": 3407
+    ,
+    "plot_internal_x": true,
+    "plot_internal_x_n": 10
   }
 }
