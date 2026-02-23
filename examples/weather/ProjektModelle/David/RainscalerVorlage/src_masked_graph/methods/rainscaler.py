@@ -87,6 +87,17 @@ def _add_corrdiff_root():
 
 _add_corrdiff_root()
 
+def _apply_data_path_override(opt):
+    local_path = os.environ.get("CWA_DATA_PATH")
+    if not local_path:
+        return opt
+    if "datasets" not in opt:
+        return opt
+    for phase in ["train", "test"]:
+        if phase in opt["datasets"]:
+            opt["datasets"][phase]["data_path"] = local_path
+    return opt
+
 def _as_tensor(x):
     if isinstance(x, torch.Tensor):
         return x.float()
@@ -184,6 +195,7 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
     opt['dist'] = parser.parse_args().dist
 
     opt = _apply_auto_paths(opt)
+    opt = _apply_data_path_override(opt)
 
 
     # ----------------------------------------
@@ -282,6 +294,8 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
                                           num_workers=dataset_opt['dataloader_num_workers']//opt['num_gpu'],
                                           drop_last=True,
                                           pin_memory=True,
+                                          persistent_workers=(dataset_opt['dataloader_num_workers']//opt['num_gpu']) > 0,
+                                          prefetch_factor=2 if (dataset_opt['dataloader_num_workers']//opt['num_gpu']) > 0 else None,
                                           sampler=train_sampler)
             else:
                 train_loader = DataLoader(train_set,
@@ -289,7 +303,9 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
                                           shuffle=dataset_opt['dataloader_shuffle'],
                                           num_workers=dataset_opt['dataloader_num_workers'],
                                           drop_last=True,
-                                          pin_memory=True)
+                                          pin_memory=True,
+                                          persistent_workers=dataset_opt['dataloader_num_workers'] > 0,
+                                          prefetch_factor=2 if dataset_opt['dataloader_num_workers'] > 0 else None)
 
         elif phase == 'test':
             dataset_type = str(dataset_opt.get('dataset_type', '')).lower()
@@ -301,7 +317,9 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
                 test_set = define_Dataset(dataset_opt)
             test_loader = DataLoader(test_set, batch_size=1,
                                      shuffle=False, num_workers=dataset_opt['dataloader_num_workers'],
-                                     drop_last=False, pin_memory=True)
+                                     drop_last=False, pin_memory=True,
+                                     persistent_workers=dataset_opt['dataloader_num_workers'] > 0,
+                                     prefetch_factor=2 if dataset_opt['dataloader_num_workers'] > 0 else None)
             print(f"Test steps per eval: {len(test_loader)}", flush=True)
         else:
             raise NotImplementedError("Phase [%s] is not recognized." % phase)
