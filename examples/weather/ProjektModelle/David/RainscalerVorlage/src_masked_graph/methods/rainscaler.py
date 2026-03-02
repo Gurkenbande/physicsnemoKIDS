@@ -133,9 +133,18 @@ def _log_internal_x_plots(
     model.netG.eval()
     val_images = []
     val_predictions = []
+    output_maps = []
+    gt_maps = []
 
     with torch.no_grad():
-        for idx in range(num_images):
+        idx_candidates = [0, 98, 130, 236, 345, 443, 456, 654, 674, 879]
+        idx_candidates = sorted(idx_candidates)[:num_images]
+        max_idx = len(dataset)
+        idx_candidates = [i for i in idx_candidates if i < max_idx]
+        if not idx_candidates:
+            model.netG.train()
+            return
+        for idx in idx_candidates:
             img_clean, img_lr = dataset[idx]
             img_lr = _downsample_lr(_as_tensor(img_lr), scale).unsqueeze(0).to(model.device)
             img_clean = _as_tensor(img_clean).unsqueeze(0).to(model.device)
@@ -155,6 +164,8 @@ def _log_internal_x_plots(
 
             val_images.append(out_map)
             val_predictions.append(x_map)
+            output_maps.append(model.E.detach()[0].cpu())
+            gt_maps.append(model.H.detach()[0].cpu())
 
     if not val_images:
         model.netG.train()
@@ -174,6 +185,68 @@ def _log_internal_x_plots(
     plt.savefig(out_path, bbox_inches="tight")
     wandb.log({"internal_x": wandb.Image(fig)}, step=step)
     plt.close(fig)
+
+    if output_maps and gt_maps:
+        num_samples = len(output_maps)
+        num_channels = min(4, output_maps[0].shape[0])
+        ch_mins = []
+        ch_maxs = []
+        for c in range(num_channels):
+            vals = []
+            for i in range(num_samples):
+                vals.append(output_maps[i][c])
+                vals.append(gt_maps[i][c])
+            ch_min = min(float(v.min()) for v in vals)
+            ch_max = max(float(v.max()) for v in vals)
+            ch_mins.append(ch_min)
+            ch_maxs.append(ch_max)
+
+        fig, axs = plt.subplots(num_channels, num_samples, figsize=(3 * num_samples, 3 * num_channels))
+        if num_channels == 1 and num_samples == 1:
+            axs = np.array([[axs]])
+        elif num_channels == 1:
+            axs = np.array([axs])
+        elif num_samples == 1:
+            axs = np.array([[ax] for ax in axs])
+
+        for c in range(num_channels):
+            for i in range(num_samples):
+                axs[c, i].imshow(
+                    output_maps[i][c].squeeze().numpy(),
+                    cmap="inferno",
+                    vmin=ch_mins[c],
+                    vmax=ch_maxs[c],
+                )
+                axs[c, i].axis("off")
+
+        out_path = os.path.join(plots_dir, f"outputs_step_{step}.png")
+        plt.savefig(out_path, bbox_inches="tight")
+        wandb.log({"outputs": wandb.Image(fig)}, step=step)
+        plt.close(fig)
+
+        fig, axs = plt.subplots(num_channels, num_samples, figsize=(3 * num_samples, 3 * num_channels))
+        if num_channels == 1 and num_samples == 1:
+            axs = np.array([[axs]])
+        elif num_channels == 1:
+            axs = np.array([axs])
+        elif num_samples == 1:
+            axs = np.array([[ax] for ax in axs])
+
+        for c in range(num_channels):
+            for i in range(num_samples):
+                axs[c, i].imshow(
+                    gt_maps[i][c].squeeze().numpy(),
+                    cmap="inferno",
+                    vmin=ch_mins[c],
+                    vmax=ch_maxs[c],
+                )
+                axs[c, i].axis("off")
+
+        out_path = os.path.join(plots_dir, f"gt_outputs_step_{step}.png")
+        plt.savefig(out_path, bbox_inches="tight")
+        wandb.log({"gt_outputs": wandb.Image(fig)}, step=step)
+        plt.close(fig)
+
     model.netG.train()
 
 
@@ -346,7 +419,9 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
     # ----------------------------------------
     '''
 
-    for epoch in range(10):  # keep running
+    test_every_epochs = opt["train"].get("test_every_epochs", 0)
+
+    for epoch in range(30):  # keep running #might do less epochs idk
         if opt['dist']:
             train_sampler.set_epoch(epoch)
         
@@ -534,6 +609,102 @@ def main(json_path='../deep_learning/options/rainscaler_config.json'):
 
             #     # testing log
             #     logger.info('<epoch:{:3d}, iter:{:8,d}, Average PSNR : {:<.2f}dB, Average MAE : {:<.5f} , Average SSIM : {:<.5f}\n'.format(epoch, current_step, avg_psnr, avg_mae*100, avg_ssim))
+
+        # -------------------------------
+        # 7) epoch-based testing (new)
+        # -------------------------------
+        if (
+            opt["rank"] == 0
+            and test_every_epochs
+            and test_every_epochs > 0
+            and "test_loader" in locals()
+            and (epoch + 1) % test_every_epochs == 0
+        ):
+            avg_psnr = 0.0
+            avg_mae = 0.0
+            avg_ssim = 0.0
+            psnr_count = 0
+            mae_count = 0
+            ssim_count = 0
+            idx = 0
+
+            for test_data in test_loader:
+                idx += 1
+                if isinstance(test_data, (list, tuple)) and len(test_data) >= 2:
+                    img_clean = test_data[0].float()
+                    img_lr = test_data[1].float()
+                    if opt["scale"] > 1:
+                        if img_lr.dim() == 3:
+                            img_lr = img_lr.unsqueeze(0)
+                            lr_h = img_lr.shape[-2] // opt["scale"]
+                            lr_w = img_lr.shape[-1] // opt["scale"]
+                            img_lr = F.interpolate(
+                                img_lr, size=(lr_h, lr_w), mode="area"
+                            )
+                            img_lr = img_lr.squeeze(0)
+                        elif img_lr.dim() == 4:
+                            lr_h = img_lr.shape[-2] // opt["scale"]
+                            lr_w = img_lr.shape[-1] // opt["scale"]
+                            img_lr = F.interpolate(
+                                img_lr, size=(lr_h, lr_w), mode="area"
+                            )
+                    test_data = {
+                        "L": img_lr,
+                        "H": img_clean,
+                        "L_path": [opt["datasets"]["test"]["data_path"]],
+                        "H_path": [opt["datasets"]["test"]["data_path"]],
+                    }
+                image_name_ext = os.path.basename(test_data["L_path"][0])
+
+                model.feed_data(test_data)
+                model.test()
+
+                visuals = model.current_visuals()
+                E_img = util.tensor2uint_regression(visuals["E"])
+                H_img = util.tensor2uint_regression(visuals["H"])
+
+                current_psnr, current_mae = util.calculate_score(
+                    E_img, H_img, border=border
+                )
+                current_ssim = util.calculate_ssim(E_img, H_img, border=border)
+                psnr_str = "nan" if current_psnr is None else f"{current_psnr:<4.2f}"
+                ssim_str = "nan" if current_ssim is None else f"{current_ssim:<7.5f}"
+                mae_str = "nan" if current_mae is None else f"{current_mae*100:<7.5f}"
+
+                logger.info(
+                    "{:->4d}--> {:>10s} | {}dB | {} | {} ".format(
+                        idx, image_name_ext, psnr_str, mae_str, ssim_str
+                    )
+                )
+
+                wandb.log(
+                    {
+                        "test_psnr_db": current_psnr,
+                        "test_mae": None if current_mae is None else current_mae * 100,
+                        "test_ssim": current_ssim,
+                    },
+                    step=idx,
+                )
+
+                if current_psnr is not None:
+                    avg_psnr += current_psnr
+                    psnr_count += 1
+                if current_mae is not None:
+                    avg_mae += current_mae
+                    mae_count += 1
+                if current_ssim is not None:
+                    avg_ssim += current_ssim
+                    ssim_count += 1
+
+            avg_psnr = avg_psnr / psnr_count if psnr_count > 0 else float("nan")
+            avg_mae = avg_mae / mae_count if mae_count > 0 else float("nan")
+            avg_ssim = avg_ssim / ssim_count if ssim_count > 0 else float("nan")
+
+            logger.info(
+                "<epoch:{:3d}, iter:{:8,d}, Average PSNR : {:<.2f}dB, Average MAE : {:<.5f} , Average SSIM : {:<.5f}\n".format(
+                    epoch, current_step, avg_psnr, avg_mae * 100, avg_ssim
+                )
+            )
 
 if __name__ == '__main__':
     main()

@@ -123,6 +123,8 @@ def _log_internal_x_plots(
     model.netG.eval()
     val_images = []
     val_predictions = []
+    output_maps = []
+    gt_maps = []
 
     with torch.no_grad():
         for idx in range(num_images):
@@ -145,6 +147,8 @@ def _log_internal_x_plots(
 
             val_images.append(out_map)
             val_predictions.append(x_map)
+            output_maps.append(model.E.detach()[0].cpu())
+            gt_maps.append(model.H.detach()[0].cpu())
 
     if not val_images:
         model.netG.train()
@@ -164,6 +168,68 @@ def _log_internal_x_plots(
     plt.savefig(out_path, bbox_inches="tight")
     wandb.log({"internal_x": wandb.Image(fig)}, step=step)
     plt.close(fig)
+
+    if output_maps and gt_maps:
+        num_samples = len(output_maps)
+        num_channels = min(4, output_maps[0].shape[0])
+        ch_mins = []
+        ch_maxs = []
+        for c in range(num_channels):
+            vals = []
+            for i in range(num_samples):
+                vals.append(output_maps[i][c])
+                vals.append(gt_maps[i][c])
+            ch_min = min(float(v.min()) for v in vals)
+            ch_max = max(float(v.max()) for v in vals)
+            ch_mins.append(ch_min)
+            ch_maxs.append(ch_max)
+
+        fig, axs = plt.subplots(num_channels, num_samples, figsize=(3 * num_samples, 3 * num_channels))
+        if num_channels == 1 and num_samples == 1:
+            axs = np.array([[axs]])
+        elif num_channels == 1:
+            axs = np.array([axs])
+        elif num_samples == 1:
+            axs = np.array([[ax] for ax in axs])
+
+        for c in range(num_channels):
+            for i in range(num_samples):
+                axs[c, i].imshow(
+                    output_maps[i][c].squeeze().numpy(),
+                    cmap="inferno",
+                    vmin=ch_mins[c],
+                    vmax=ch_maxs[c],
+                )
+                axs[c, i].axis("off")
+
+        out_path = os.path.join(plots_dir, f"outputs_step_{step}.png")
+        plt.savefig(out_path, bbox_inches="tight")
+        wandb.log({"outputs": wandb.Image(fig)}, step=step)
+        plt.close(fig)
+
+        fig, axs = plt.subplots(num_channels, num_samples, figsize=(3 * num_samples, 3 * num_channels))
+        if num_channels == 1 and num_samples == 1:
+            axs = np.array([[axs]])
+        elif num_channels == 1:
+            axs = np.array([axs])
+        elif num_samples == 1:
+            axs = np.array([[ax] for ax in axs])
+
+        for c in range(num_channels):
+            for i in range(num_samples):
+                axs[c, i].imshow(
+                    gt_maps[i][c].squeeze().numpy(),
+                    cmap="inferno",
+                    vmin=ch_mins[c],
+                    vmax=ch_maxs[c],
+                )
+                axs[c, i].axis("off")
+
+        out_path = os.path.join(plots_dir, f"gt_outputs_step_{step}.png")
+        plt.savefig(out_path, bbox_inches="tight")
+        wandb.log({"gt_outputs": wandb.Image(fig)}, step=step)
+        plt.close(fig)
+
     model.netG.train()
 
 

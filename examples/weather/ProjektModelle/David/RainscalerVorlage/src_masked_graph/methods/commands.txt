@@ -10,4 +10,8 @@ rsync -av --update \
   s460479@julia2.hpc.uni-wuerzburg.de:/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/
 
 
-  source /home/s460479/ProjektRainscale/Cluster/venv/bin/activate
+    
+
+
+
+tr -d '\r' < run.sh > run.sh.tmp && mv run.sh.tmp run.sh

@@ -23,7 +23,7 @@
       "name": "cwb_train",
       "dataset_type": "cwb_nemo",
 
-      "data_path": "/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/cwa_dataset_3months.zarr",
+      "data_path": "/tmp/cwa_dataset_3months.zarr",
       "normalization": "v1",
       "all_times": false,
       "train": true,
@@ -36,7 +36,7 @@
       "ds_factor": 1,
 
       "dataloader_shuffle": true,
-      "dataloader_num_workers": 2,
+      "dataloader_num_workers": 32,
       "dataloader_batch_size": 32
     },
 
@@ -44,7 +44,7 @@
       "name": "cwb_test",
       "dataset_type": "cwb_nemo",
 
-      "data_path": "/home/s460479/ProjektRainscale/Cluster/physicsnemoKIDS/examples/weather/ProjektModelle/David/Data/cwa_dataset_3months.zarr",
+      "data_path": "/tmp/cwa_dataset_3months.zarr",
       "all_times": true,
       "train": false,
 
@@ -56,7 +56,7 @@
       "ds_factor": 1,
 
       "dataloader_shuffle": false,
-      "dataloader_num_workers": 0,
+      "dataloader_num_workers": 32,
       "dataloader_batch_size": 1
     }
   },
@@ -92,11 +92,11 @@
 
   "train": {
     "G_lossfn_type": "l1",
-    "G_lossfn_weight": 1e-2,
-    "M_lossfn_weight": 1e-3,
+    "G_lossfn_weight": 5e-2,
+    "M_lossfn_weight": 1e-4,
     "global_lossfn_weight": 1e-3,
     "F_lossfn_type": "l1",
-    "F_lossfn_weight": 0,
+    "F_lossfn_weight": 1,
     "F_feature_layer": 34,
     "F_weights": 1.0,
     "F_use_input_norm": true,
