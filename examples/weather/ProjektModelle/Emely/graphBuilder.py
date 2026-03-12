@@ -3,7 +3,8 @@ import torch
 from torch_geometric.data import HeteroData
 
 class BipartiteGraph(torch.utils.data.Dataset):
-    def __init__(self, ds, device, coarse_shape=(8, 8), fine_shape=(64, 64), neighbors=4, seq_len=None):
+    def __init__(self, ds, device, coarse_shape=(8, 8), fine_shape=(64, 64), neighbors=4, seq_len=None, n_neighbors=1):
+      
         super().__init__()
         self.device = device
         self.seq_len = seq_len
@@ -13,6 +14,7 @@ class BipartiteGraph(torch.utils.data.Dataset):
         self.n_coarse = coarse_shape[0] * coarse_shape[1]
         self.n_fine = fine_shape[0] * fine_shape[1]
         self.neighbors = neighbors
+        self.n_neighbors = n_neighbors
 
         y_c = np.linspace(0, 1, coarse_shape[0])
         x_c = np.linspace(0, 1, coarse_shape[1])
@@ -45,34 +47,53 @@ class BipartiteGraph(torch.utils.data.Dataset):
 
     def build_edges(self):
         with torch.no_grad():
-            dist = torch.cdist(self.fine_positions, self.coarse_positions)  
-            knn = dist.topk(k=self.neighbors,largest=False).indices 
+            # low to high edges
+            dist = torch.cdist(self.fine_positions, self.coarse_positions)
+            knn = dist.topk(k=self.neighbors, largest=False).indices
             high_idx = torch.arange(self.n_fine, device=self.device).repeat_interleave(self.neighbors)
             low_idx = knn.reshape(-1)
-            self.edge_index_low_to_high = torch.stack([low_idx, high_idx],dim=0)
+            self.edge_index_low_to_high = torch.stack([low_idx, high_idx], dim=0)
 
-        Hf, Wf = self.fine_shape
-        hi, wi = torch.meshgrid(torch.arange(Hf),torch.arange(Wf),indexing="ij")
+            # fine to fine edges
+            Hf, Wf = self.fine_shape
+            hi, wi = torch.meshgrid(torch.arange(Hf), torch.arange(Wf), indexing="ij")
+            hi = hi.flatten()
+            wi = wi.flatten()
 
-        hi = hi.flatten()
-        wi = wi.flatten()
-        edges = []
-        
-        #neighbor_offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)] # 4 neighbors
-        neighbor_offsets = [
-                    (-1, 0), (1, 0), (0, -1), (0, 1),     
-                    (-1, -1), (-1, 1), (1, -1), (1, 1)   
-                ]  # 8 neighbors 
-        
-        for dh, dw in neighbor_offsets:
-            nh = hi + dh
-            nw = wi + dw
-            mask = (0 <= nh) & (nh < Hf) & (0 <= nw) & (nw < Wf)
-            src = hi[mask] * Wf + wi[mask]
-            dst = nh[mask] * Wf + nw[mask]
-            edges.append(torch.stack([src, dst]))
+            max_radius = max(Hf, Wf)
+            all_offsets = [
+                (dh, dw)
+                for dh in range(-max_radius, max_radius + 1)
+                for dw in range(-max_radius, max_radius + 1)
+                if not (dh == 0 and dw == 0)
+            ]
+            all_offsets.sort(key=lambda d: d[0]**2 + d[1]**2)
 
-        self.edge_index_high_within = torch.cat(edges, dim=1).to(self.device)
+            assert self.n_neighbors % 2 == 0
+            n_pairs = self.n_neighbors // 2
+
+            selected = []
+            seen = set()
+            for dh, dw in all_offsets:
+                if (dh, dw) in seen:
+                    continue
+                selected.append((dh, dw))
+                selected.append((-dh, -dw))
+                seen.add((dh, dw))
+                seen.add((-dh, -dw))
+                if len(selected) // 2 >= n_pairs:
+                    break
+
+            edges = []
+            for dh, dw in selected:
+                nh = hi + dh
+                nw = wi + dw
+                mask = (0 <= nh) & (nh < Hf) & (0 <= nw) & (nw < Wf)
+                src = hi[mask] * Wf + wi[mask]
+                dst = nh[mask] * Wf + nw[mask]
+                edges.append(torch.stack([src, dst]))
+
+            self.edge_index_high_within = torch.cat(edges, dim=1).to(self.device)
 
 
     def __getitem__(self, idx):
