@@ -52,7 +52,7 @@ class DataConfig:
         self.tensorboard_path = self.out_path + '/tensorboard'
         self.checkpoint_path: str = self.out_path + '/checkpoints'
         self.config_path: str = self.out_path + '/config-files'
-
+#
 
 @dataclass
 class TrainingConfig:

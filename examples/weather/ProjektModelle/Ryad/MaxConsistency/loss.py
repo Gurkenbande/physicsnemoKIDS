@@ -47,6 +47,7 @@ class PerceptualLoss(nn.Module):
         self.lpips_losses.requires_grad_(False)
 
         self.l1_weight = l1_weight
+        #
 
 
     def forward(self, input: torch.tensor, target: torch.tensor):

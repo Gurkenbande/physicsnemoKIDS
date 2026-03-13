@@ -54,6 +54,7 @@ class WeatherDownscalingDataset:
                 f"Target key '{self.target_key}' not found. "
                 f"Available keys: {list(self.root.keys())}"
             )
+        #
 
         self.x_low = self.root[self.input_key]
         self.y_high = self.root[self.target_key]

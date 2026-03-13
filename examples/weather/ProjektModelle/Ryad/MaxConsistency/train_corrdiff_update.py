@@ -250,6 +250,7 @@ def main():
     ).to(device)
     
     # Speichere normalisierungs-stats im Modell für Denormalisierung
+    #
     model.y_mean = wd.y_mean
     model.y_std = wd.y_std
     
