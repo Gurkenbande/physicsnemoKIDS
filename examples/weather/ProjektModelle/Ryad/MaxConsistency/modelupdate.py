@@ -311,11 +311,9 @@ class Consistency(LightningModule):
         )
 
 
-    def on_after_optimizer_step(self, optimizer, optimizer_idx=0) -> None:
-        param = [p.data for p in self.model.parameters()]
-        param_ema = [p.data for p in self.model_ema.parameters()]
-        torch._foreach_mul_(param_ema, self.ema_decay)
-        torch._foreach_add_(param_ema, param, alpha=1 - self.ema_decay)
+    def optimizer_step(self, *args, **kwargs) -> None:
+        super().optimizer_step(*args, **kwargs)
+        self.ema_update()
 
 
     @torch.no_grad()
@@ -327,13 +325,8 @@ class Consistency(LightningModule):
         torch._foreach_add_(param_ema, param, alpha=1 - self.ema_decay)
 
         self._ema_decay_tracker(self.ema_decay)
-        self.log(
-            "ema_decay",
-            self._ema_decay_tracker,
-            on_step=False,
-            on_epoch=True,
-            logger=True,
-        )
+        
+        
 
 
     @property
@@ -440,7 +433,7 @@ class Consistency(LightningModule):
         x_image_size,
         y_image_size,
         steps: int = 1,
-        sample_times: List = [None],
+        sample_times: Optional[List[float]] = None,
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
         use_ema: bool = False,
     ) -> torch.Tensor:
@@ -466,7 +459,7 @@ class Consistency(LightningModule):
         if conditioning.dim() != 4:
             raise ValueError(f"conditioning must be 4‑D (B,C,H,W), got {conditioning.shape}")
 
-        if sample_times[0] is not None:
+        if sample_times is not None and len(sample_times) > 0:
             time = torch.tensor([sample_times[0]], device=self.device)
         else:
             time = torch.tensor([self.time_max], device=self.device)
@@ -500,13 +493,11 @@ class Consistency(LightningModule):
         # forward expects all channels; output is (B, out_channels, H, W)
         images: torch.Tensor = self._forward(self.model_ema if use_ema else self.model, images, time)
 
-        if len(sample_times) <= 1:
-            return images, images_cond
-
-        if sample_times[0] is not None:
-            times = [torch.tensor([t], device=self.device) for t in sample_times]
-
+        if sample_times is not None and len(sample_times) > 1:
+            times = [torch.tensor([t], device=self.device) for t in sample_times[1:]]
         else:
+            if steps <= 1:
+                return images, images_cond
             _timesteps = list(
                 reversed(range(0, self.bins_max, self.bins_max // steps - 1))
             )[1:]
@@ -523,7 +514,7 @@ class Consistency(LightningModule):
             )
             images = images + math.sqrt(time.item() ** 2 - self.time_min**2) * target_noise
 
-            if sample_times[0] is None:
+            if sample_times is None:
                 time = time[None]
 
             # Conditioning wieder concatenieren vor dem nächsten Forward-Pass
