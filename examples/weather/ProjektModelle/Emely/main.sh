@@ -15,8 +15,8 @@ cp -r \
 /home/s448562/LAB4/data_corrdiff_3months.zarr \
 /tmp/data_corrdiff_3months.zarr
 
-
 torchrun \
-    --nproc_per_node=2 \
-    --nnodes=1 \
-    main.py
+--nproc_per_node=2 \
+--nnodes=1 \
+--master_port=$((29500 + SLURM_JOB_ID % 1000)) \
+main.py

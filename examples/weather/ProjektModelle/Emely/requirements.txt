@@ -1,0 +1,11 @@
+torch
+torch_geometric
+numpy
+netCDF4
+zarr
+hydra-core
+omegaconf
+wandb
+tqdm
+matplotlib
+scipy

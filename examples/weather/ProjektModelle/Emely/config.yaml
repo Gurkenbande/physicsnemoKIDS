@@ -1,0 +1,93 @@
+
+hydra:
+    job:
+          chdir: false
+          name: gnn4cd_rall
+    run:
+          dir: ./output/${hydra:job.name}
+    searchpath:
+          - pkg://conf/base
+
+defaults:
+    - _self_ 
+
+dataset:
+    type: subset  # mini/subset/full
+
+    # mini:
+    #data_path: "/Users/emely/Uni/Lab4/Lab4/data_corrdiff_mini/hrrr_mini_train.nc"
+    #stats_path: "/Users/emely/Uni/Lab4/Lab4/data_corrdiff_mini/stats.json"
+    #data_path = "/home/s448562/LAB4/data_corrdiff_mini/hrrr_mini_train.nc"
+    #stats_path = "/home/s448562/LAB4/data_corrdiff_mini/stats.json"
+
+    #fine_shape: [64, 64]      
+    #coarse_shape: [8, 8]
+    #n_input_features: 28
+    
+    # subset:
+    data_path: "/tmp/data_corrdiff_3months.zarr"
+    fine_shape: [450, 450]
+    coarse_shape: [50, 50]
+    n_input_features: 20
+
+   
+    # Graph parameters
+    neighbors: 9 # each high node has k low node neighbors
+    n_neighbors: 8 # high-within-high neighbors
+    seq_len: null # time-sequence
+
+dataloader:
+  num_workers: 16
+  persistent_workers: true
+  pin_memory: true
+
+seed: 42 
+# Model architecture (GNN4CD_Model)
+model:
+    type: rall
+    encoding_dim: 128
+    h_hid: 64
+    n_layers: 3 # only with timesequence
+    high_in: 4
+    low2high_out: 32
+    high_out: 32
+    n_output_vars: 1
+
+
+# Training parameters
+trainer:
+    epochs: 60
+    batch_size: 4
+    lr: 0.005
+    splits:
+        train: 0.8
+        val: 0.1
+        test: 0.1
+    optimizer:
+        type: Adam
+    scheduler:
+        type: ReduceLROnPlateau
+        factor: 0.5
+        patience: 4
+    loss: MSEGradientLoss
+    output_path: "./output"
+
+# Distributed training
+distributed:
+    backend: nccl
+    nproc_per_node: 2
+    find_unused_parameters: true
+
+# SLURM configuration
+slurm:
+    partition: standard
+    gres: gpu:2
+    ntasks: 1
+    cpus_per_task: 32
+    mem: 128G
+    tmp: 500G
+
+# Logging
+wandb:
+    mode: "disabled"  # online/offline/disabled
+    project: "gnn4cd_weather"
