@@ -54,7 +54,7 @@ class WeatherDownscalingDataset:
                 f"Target key '{self.target_key}' not found. "
                 f"Available keys: {list(self.root.keys())}"
             )
-        #
+        
 
         self.x_low = self.root[self.input_key]
         self.y_high = self.root[self.target_key]
@@ -71,8 +71,7 @@ class WeatherDownscalingDataset:
         self.n_output_vars = self.y_high.shape[1]
         self.coarse_shape = (56, 56)
         self.fine_shape = (448, 448)
-        # self.coarse_shape = tuple(self.x_low.shape[-2:])
-        # self.fine_shape = tuple(self.y_high.shape[-2:])
+        
 
         print("Input shape :", self.x_low.shape)
         print("Target shape:", self.y_high.shape)
@@ -138,8 +137,7 @@ class WeatherDownscalingDataset:
 
 
     def _compute_channelwise_stats(self):
-        print("\nCalculating channel-wise normalization statistics...")
-
+        
         max_samples = 500
         stride = max(1, self.length // max_samples)
 
@@ -233,13 +231,11 @@ class _TorchDownscalingDataset(Dataset):
         x = torch.as_tensor(self.x_low[idx], dtype=torch.float32)
         y = torch.as_tensor(self.y_high[idx], dtype=torch.float32)
 
-        # Impute NaN/Inf mit channel-wise Mittelwerten
         x_valid = torch.isfinite(x)
         y_valid = torch.isfinite(y)
         x = torch.where(x_valid, x, self.x_mean[:, None, None])
         y = torch.where(y_valid, y, self.y_mean[:, None, None])
         
-        # Verwende globale normalisierungs-stats
         x = (x - self.x_mean[:, None, None]) / self.x_std[:, None, None]
         y = (y - self.y_mean[:, None, None]) / self.y_std[:, None, None]
         
@@ -253,80 +249,3 @@ class _TorchDownscalingDataset(Dataset):
         return x, y
     
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    """
-    
-    def __init__(
-        self,
-        mode: str,
-        device: torch.device,
-        neighbors: int = 4,
-        seq_len: int | None = None,
-    ):
-        assert mode in ["sub", "full"]
-        self.mode = mode
-        self.device = device
-        self.neighbors = neighbors
-        self.seq_len = seq_len
-
-        self._load_raw_dataset()
-        self._set_resolution()
-        self._build_graph_dataset()
-
-    def _load_raw_dataset(self):
-        if self.mode == "sub":
-            self.data_path = Path("/tmp/data_corrdiff_3months.zarr")
-            self.ds = get_zarr_dataset(data_path=self.data_path)
-
-        elif self.mode == "full":
-            self.data_path = Path("/tmp/data_corrdiff.zarr")
-            self.ds = get_zarr_dataset(data_path=self.data_path)
-
-    def _set_resolution(self):
-        self.coarse_shape = (56, 56)
-        self.fine_shape = (448, 448)
-        self.n_input_features = 20
-        self.n_output_vars = 4
-
-    def _build_graph_dataset(self):
-        self.graph_dataset = BipartiteGraph(
-            ds=self.ds,
-            device=self.device,
-            coarse_shape=self.coarse_shape,
-            fine_shape=self.fine_shape,
-            neighbors=self.neighbors,
-            seq_len=self.seq_len,
-        )
-
-    def get_dataset(self):
-        return self.graph_dataset
-
-    def get_feature_info(self):
-        return {
-            "n_input_features": self.n_input_features,
-            "n_output_vars": self.n_output_vars,
-            "coarse_shape": self.coarse_shape,
-            "fine_shape": self.fine_shape,
-        }
-
-    def longitude(self):
-        return self.ds.longitude()
-
-    def latitude(self):
-        return self.ds.latitude()
-
-    def __len__(self):
-        return len(self.graph_dataset) 
-
-print("a")               
-"""
