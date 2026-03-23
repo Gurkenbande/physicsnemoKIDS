@@ -61,10 +61,9 @@ class PerceptualLoss(nn.Module):
         input_clean = torch.where(torch.isfinite(input), input, torch.zeros_like(input))
         target_clean = torch.where(torch.isfinite(target), target, torch.zeros_like(target))
 
-        # LPIPS expects values in [-1, 1].
-        # Use a stable global scaling for LPIPS only; keep original tensors for L1.
-        input_lp = (input_clean / 3.0).clamp(-1.0, 1.0)
-        target_lp = (target_clean / 3.0).clamp(-1.0, 1.0)
+        
+        input_lp = (input_clean / 6.0).clamp(-1.0, 1.0)
+        target_lp = (target_clean / 6.0).clamp(-1.0, 1.0)
 
         #upscaled_input = F.interpolate(input, (224, 224), mode="bilinear")
         #upscaled_target = F.interpolate(target, (224, 224), mode="bilinear")
@@ -76,7 +75,6 @@ class PerceptualLoss(nn.Module):
         upscaled_input = F.interpolate(input_lpips, (224, 224), mode="bilinear")
         upscaled_target = F.interpolate(target_lpips, (224, 224), mode="bilinear")
 
-        # LPIPS braucht 3 Kanäle
         upscaled_input = torch.cat([upscaled_input]*3, dim=1)
         upscaled_target = torch.cat([upscaled_target]*3, dim=1)
 
