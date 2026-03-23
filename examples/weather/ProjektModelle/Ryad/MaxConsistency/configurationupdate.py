@@ -26,7 +26,7 @@ class DataConfig:
     
     use_mnist: bool = False
 
-    sample_dimension: tuple = (448, 448)         # int = field(default=(None, None))
+    sample_dimension: tuple = (448, 448)         
     
     transforms: List = field(default_factory= lambda: ['log', 'normalize_minus1_to_plus1'])
 
@@ -52,7 +52,7 @@ class DataConfig:
         self.tensorboard_path = self.out_path + '/tensorboard'
         self.checkpoint_path: str = self.out_path + '/checkpoints'
         self.config_path: str = self.out_path + '/config-files'
-#
+
 
 @dataclass
 class TrainingConfig:
@@ -98,9 +98,8 @@ class DiffusionConfig:
                                           "UpBlock2D",
                                           "UpBlock2D",))
 
-    diffusion_model: str = 've' # 've' or 'consistency'
+    diffusion_model: str = 've' 
 
-    # SDE
     sigma_max: float = 1000
     sigma_min: float = 1e-2
 
@@ -226,3 +225,4 @@ def parse_command_line():
             setattr(config, arg, value)
 
     return config
+#
