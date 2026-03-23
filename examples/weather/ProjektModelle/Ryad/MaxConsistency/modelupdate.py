@@ -38,19 +38,7 @@ class Consistency(LightningModule):
         **kwargs,
     ) -> None:
 
-        """
-        Args:
-            config: Network configuration.
-            bins_min: Minimum number of time steps.
-            bins_max: Maximum number of time steps.
-            bins_rho: Determines time boundaries.
-            loss_func: Loss function.
-            initial_ema_decay: Exponential average decay parameter.
-            optimizer_type: Gradient decent optimizer.
-            num_samples: Number of generated samples per batch.
-            use_ema: Enables the EMA model for inference.
-            sample_seed: Seed value of the random number generator.
-        """
+        
 
         super().__init__()
         
@@ -58,10 +46,7 @@ class Consistency(LightningModule):
 
         self.config = config
 
-        # configuration `in_channels` should equal the total number of
-        # channels fed to the UNet.  earlier code mistakenly added the
-        # output channels again, which doubled the channel count during
-        # model construction and caused mismatches during forward passes.
+        
         model = UNet2DModel(
             in_channels=self.config.in_channels,
             out_channels=self.config.out_channels,
@@ -70,8 +55,10 @@ class Consistency(LightningModule):
             up_block_types=self.config.up_block_types
         )
 
+        # Modell speichern
         self.model = model
         self.model_ema = copy.deepcopy(model)
+        
         self.image_size = self.config.sample_dimension
 
         self.model_ema.requires_grad_(False)
@@ -83,6 +70,8 @@ class Consistency(LightningModule):
         else:
             raise ValueError(f"loss function not defined: {loss_func}")
 
+
+        # Optimizertyp speichern
         self.optimizer_type = optimizer_type
 
         self.learning_rate = self.config.lr
@@ -109,6 +98,7 @@ class Consistency(LightningModule):
 
      
     def configure_optimizers(self):
+        
         optimizer = self.optimizer_type(self.parameters(), lr=self.learning_rate)
 
         total_steps = max(1, int(self.trainer.estimated_stepping_batches))
@@ -143,16 +133,7 @@ class Consistency(LightningModule):
         model: nn.Module,
         images: torch.Tensor,
         times: torch.Tensor):
-        """ Evaluates the network
-
-        Args:
-            model: network modul
-            images: Input batch 
-            times: Noise time
-
-        Returns:
-            Network output 
-        """
+       
 
         skip_coef = self.data_std**2 / ((times - self.time_min).pow(2) + self.data_std**2)
         out_coef = self.data_std * times / (times.pow(2) + self.data_std**2).pow(0.5)
@@ -309,6 +290,59 @@ class Consistency(LightningModule):
             logger=True,
             prog_bar=True
         )
+        mask = torch.isfinite(images)
+        if mask.sum() > 0:
+            diff = (pred - images) ** 2  
+            mask = torch.isfinite(images)
+
+            rmse_per_channel = []
+            for c in range(diff.shape[1]):
+                valid = mask[:, c]
+                if valid.sum() > 0:
+                    mse_c = diff[:, c][valid].mean()
+                    rmse_c = torch.sqrt(mse_c)
+                    self.log(f"val_rmse_ch{c}", rmse_c, on_epoch=True)
+                    rmse_per_channel.append(rmse_c)
+            
+
+        
+        ensemble = []
+        ensemble_size = 4
+
+        for _ in range(ensemble_size):
+            pred_e, _ = self.sample_conditional(
+                conditioning=era5,
+                x_image_size=images.shape[-2],
+                y_image_size=images.shape[-1],
+                steps=5,
+                use_ema=True,
+            )
+            ensemble.append(pred_e)
+
+        ensemble = torch.stack(ensemble, dim=0)  
+
+        
+        target_exp = images.unsqueeze(0)
+
+        term1 = torch.abs(ensemble - target_exp).mean(dim=0)
+
+        pairwise_diff = torch.abs(
+            ensemble.unsqueeze(1) - ensemble.unsqueeze(0)
+        )
+        term2 = 0.5 * pairwise_diff.mean(dim=(0, 1))
+
+        crps_map = term1 - term2  
+
+        
+        crps = crps_map[mask].mean()
+        self.log("val_crps", crps, on_epoch=True, prog_bar=True)
+
+        
+        for c in range(crps_map.shape[1]):
+            valid = mask[:, c]
+            if valid.sum() > 0:
+                crps_c = crps_map[:, c][valid].mean()
+                self.log(f"val_crps_ch{c}", crps_c, on_epoch=True)
 
 
     def optimizer_step(self, *args, **kwargs) -> None:
@@ -388,7 +422,7 @@ class Consistency(LightningModule):
             Generated batch of samples.
         """
 
-        # unconditioned sampling uses full `in_channels` as defined in config
+        
         if x_image_size and y_image_size is not None:
             shape = (num_samples, self.config.in_channels, x_image_size, y_image_size)
         else:
@@ -453,7 +487,7 @@ class Consistency(LightningModule):
             Generated batch of samples.
         """
 
-        # conditioning expected to be 4‑D (B,cond_channels,H,W)
+        
         if conditioning.dim() == 5 and conditioning.size(1) == 1:
             conditioning = conditioning.squeeze(1)
         if conditioning.dim() != 4:
@@ -464,9 +498,7 @@ class Consistency(LightningModule):
         else:
             time = torch.tensor([self.time_max], device=self.device)
 
-        # build initial high‑res input by concatenating conditioning with
-        # zeros for the target channels.  here `config.in_channels` is the
-        # full width (cond + output); compute cond channels explicitly.
+        
         cond_ch = self.config.in_channels - self.config.out_channels
         if conditioning.shape[1] != cond_ch:
             raise ValueError(
@@ -475,22 +507,21 @@ class Consistency(LightningModule):
             )
         B, Cc, Hc, Wc = conditioning.shape
         
-        # Interpolate conditioning to target size
+        
         conditioning_up = torch.nn.functional.interpolate(
             conditioning, size=(x_image_size, y_image_size), mode="bilinear", align_corners=False
         )
 
-        # KRITISCH: Noise nur auf die Target-Kanäle addieren, NOT auf das Conditioning!
-        # Während des Trainings ist era5_up immer sauber — das Modell erwartet das auch bei Inference.
+        
         target_noise_shape = (B, self.config.out_channels, x_image_size, y_image_size)
         target_noise = randn_tensor(target_noise_shape, generator=generator, device=self.device)
-        noisy_target = target_noise * time  # zeros + noise*t
+        noisy_target = target_noise * time  
 
         images = torch.cat([conditioning_up, noisy_target], dim=1)
 
         images_cond = images.clone()
 
-        # forward expects all channels; output is (B, out_channels, H, W)
+        
         images: torch.Tensor = self._forward(self.model_ema if use_ema else self.model, images, time)
 
         if sample_times is not None and len(sample_times) > 1:
@@ -506,7 +537,7 @@ class Consistency(LightningModule):
             times = self.timesteps_to_times(torch.tensor(_timesteps, device=self.device), bins=150)
 
         for time in times:
-            # Nur die Target-Kanäle werden re-verrauscht (Conditioning bleibt sauber)
+           
             target_noise = randn_tensor(
                 (B, self.config.out_channels, x_image_size, y_image_size),
                 generator=generator,
@@ -517,7 +548,6 @@ class Consistency(LightningModule):
             if sample_times is None:
                 time = time[None]
 
-            # Conditioning wieder concatenieren vor dem nächsten Forward-Pass
             images_full = torch.cat([conditioning_up, images], dim=1)
             images = self._forward(
                 self.model_ema if use_ema else self.model,
@@ -531,4 +561,3 @@ class Consistency(LightningModule):
     @staticmethod
     def image_time_product(images: torch.Tensor, times: torch.Tensor):
         return torch.einsum("b c h w, b -> b c h w", images, times)
-#
