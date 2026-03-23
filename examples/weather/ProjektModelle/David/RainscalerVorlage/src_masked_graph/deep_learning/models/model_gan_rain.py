@@ -21,6 +21,17 @@ class ModelGAN(ModelBase):
         # ------------------------------------
         self.opt_train = self.opt['train']    # training option
         self.pos_channels = int(self.opt["netG"].get("pos_channels", 0))
+        self.tp_channel_idx = int(self.opt_train.get("tp_channel_idx", 0))
+        self.train_only_tp_channel = bool(
+            self.opt_train.get("train_only_tp_channel", True)
+        )
+        if self.train_only_tp_channel:
+            d_in_nc = int(self.opt.get("netD", {}).get("in_nc", 1))
+            if d_in_nc != 1:
+                raise ValueError(
+                    "train_only_tp_channel=True requires netD.in_nc=1, "
+                    f"but got netD.in_nc={d_in_nc}."
+                )
         self._pos_embd_cache = {}
         self.netG = define_G(opt)
         self.netG = self.model_to_device(self.netG)
@@ -81,6 +92,12 @@ class ModelGAN(ModelBase):
                 target_ch = target[:, ch : ch + 1].repeat(1, 3, 1, 1)
                 loss = loss + self.F_lossfn(pred_ch, target_ch)
             return loss / num_channels
+
+    def _get_tp_idx(self, tensor):
+        num_channels = int(tensor.shape[1])
+        if num_channels <= 0:
+            raise ValueError("Expected at least one output channel.")
+        return max(0, min(self.tp_channel_idx, num_channels - 1))
 
     """
     # ----------------------------------------
@@ -263,11 +280,7 @@ class ModelGAN(ModelBase):
         #self.mask_label = torch.nan_to_num(self.pool(self.H) / self.L, nan=1.0)
         #self.mask_label = torch.where(self.mask_label<=0.01, 0, 1)
         #self.mask_label = self.mask_label.to(torch.float32)
-        H_down = F.interpolate(self.H, size=self.L.shape[-2:], mode="area")
-        tp_idx = 3
-        H_tp = self.H[:, tp_idx:tp_idx+1]                         # (B,1,64,64)
-        mask_label = F.interpolate(H_tp, size=self.L.shape[-2:], mode="area")  # (B,1,8,8)
-        tp_idx = 3
+        tp_idx = self._get_tp_idx(self.H)
         H_tp = self.H[:, tp_idx:tp_idx+1]  # (B,1,HR,HR)
         #TODO:chek warum interpolate
         self.mask_label = F.interpolate(H_tp, size=self.L.shape[-2:], mode="area")
@@ -293,49 +306,58 @@ class ModelGAN(ModelBase):
         self.G_optimizer.zero_grad()
         self.netG_forward()
         loss_G_total = 0
+        tp_idx = self._get_tp_idx(self.H)
+        E_tp = self.E[:, tp_idx : tp_idx + 1]
+        H_tp = self.H[:, tp_idx : tp_idx + 1]
+        if self.train_only_tp_channel:
+            E_for_disc, H_for_disc = E_tp, H_tp
+        else:
+            E_for_disc, H_for_disc = self.E, self.H
+        if self.train_only_tp_channel:
+            if E_for_disc.shape[1] != 1 or H_for_disc.shape[1] != 1:
+                raise RuntimeError(
+                    "Single-channel training mode expected tensors with one channel."
+                )
 
         if current_step % self.D_update_ratio == 0 and current_step > self.D_init_iters:  # updata D first
             if self.opt_train['global_lossfn_weight'] > 0:
-                tp_idx = 3
-                E_tp = self.E[:, tp_idx:tp_idx+1, :, :]
-                H_tp = self.H[:, tp_idx:tp_idx+1, :, :]
-
                 global_loss = self.global_lossfn_weight * self.global_lossfn(
                     E_tp.sum(dim=(2, 3)), H_tp.sum(dim=(2, 3))
                 )
                 loss_G_total += global_loss      
             if self.opt_train['G_lossfn_weight'] > 0:
-                #G_loss = self.G_lossfn_weight * self.G_lossfn(self.E, self.H)
-                """
-                To do: here
-                """
-                tp_idx = 3
-                E_tp = self.E[:, tp_idx:tp_idx+1]
-                H_tp = self.H[:, tp_idx:tp_idx+1]
-
-                E_rest = self.E[:, :tp_idx]         # channels 0..2
-                H_rest = self.H[:, :tp_idx]
-
-                loss_rest = self.G_lossfn(E_rest, H_rest)
                 loss_tp   = self.G_lossfn(E_tp * self.supervised_nodes, H_tp * self.supervised_nodes)
-
-                G_loss = self.G_lossfn_weight * (loss_rest + loss_tp)
-                # G_loss = self.G_lossfn_weight * self.G_lossfn(self.E, self.H)
+                if self.train_only_tp_channel:
+                    G_loss = self.G_lossfn_weight * loss_tp
+                else:
+                    rest_channels = [i for i in range(self.E.shape[1]) if i != tp_idx]
+                    if rest_channels:
+                        E_rest = self.E[:, rest_channels]
+                        H_rest = self.H[:, rest_channels]
+                        loss_rest = self.G_lossfn(E_rest, H_rest)
+                    else:
+                        loss_rest = torch.zeros((), device=self.device)
+                    G_loss = self.G_lossfn_weight * (loss_rest + loss_tp)
                 loss_G_total += G_loss                 # 1) pixel loss
             if self.opt_train['F_lossfn_weight'] > 0:
-                F_loss = self.F_lossfn_weight * self._compute_feature_loss_all_channels(
-                    self.E, self.H
-                )
+                if self.train_only_tp_channel:
+                    F_loss = self.F_lossfn_weight * self._compute_feature_loss_all_channels(
+                        E_tp, H_tp
+                    )
+                else:
+                    F_loss = self.F_lossfn_weight * self._compute_feature_loss_all_channels(
+                        self.E, self.H
+                    )
                 loss_G_total += F_loss                 # 2) VGG feature loss
             if self.opt_train['M_lossfn_weight'] > 0:
                 M_loss = self.M_lossfn_weight * self.M_lossfn(self.mask, self.mask_label)
                 loss_G_total += M_loss                 # 2) VGG feature loss
             if self.opt['train']['gan_type'] in ['gan', 'lsgan', 'wgan', 'softplusgan']:
-                pred_g_fake = self.netD(self.E)
+                pred_g_fake = self.netD(E_for_disc)
                 D_loss = self.D_lossfn_weight * self.D_lossfn(pred_g_fake, True)
             elif self.opt['train']['gan_type'] == 'ragan':
-                pred_d_real = self.netD(self.H).detach()
-                pred_g_fake = self.netD(self.E)
+                pred_d_real = self.netD(H_for_disc).detach()
+                pred_g_fake = self.netD(E_for_disc)
                 D_loss = self.D_lossfn_weight * (
                         self.D_lossfn(pred_d_real - torch.mean(pred_g_fake, 0, True), False) +
                         self.D_lossfn(pred_g_fake - torch.mean(pred_d_real, 0, True), True)) / 2
@@ -360,21 +382,21 @@ class ModelGAN(ModelBase):
         # tensor for calculating mean.
         if self.opt_train['gan_type'] in ['gan', 'lsgan', 'wgan', 'softplusgan']:
             # real
-            pred_d_real = self.netD(self.H)                # 1) real data
+            pred_d_real = self.netD(H_for_disc)                # 1) real data
             l_d_real = self.D_lossfn(pred_d_real, True)
             l_d_real.backward()
             # fake
-            pred_d_fake = self.netD(self.E.detach().clone()) # 2) fake data, detach to avoid BP to G
+            pred_d_fake = self.netD(E_for_disc.detach().clone()) # 2) fake data, detach to avoid BP to G
             l_d_fake = self.D_lossfn(pred_d_fake, False)
             l_d_fake.backward()
         elif self.opt_train['gan_type'] == 'ragan':
             # real
-            pred_d_fake = self.netD(self.E).detach()       # 1) fake data, detach to avoid BP to G
-            pred_d_real = self.netD(self.H)                # 2) real data
+            pred_d_fake = self.netD(E_for_disc).detach()       # 1) fake data, detach to avoid BP to G
+            pred_d_real = self.netD(H_for_disc)                # 2) real data
             l_d_real = 0.5 * self.D_lossfn(pred_d_real - torch.mean(pred_d_fake, 0, True), True)
             l_d_real.backward()
             # fake
-            pred_d_fake = self.netD(self.E.detach())
+            pred_d_fake = self.netD(E_for_disc.detach())
             l_d_fake = 0.5 * self.D_lossfn(pred_d_fake - torch.mean(pred_d_real.detach(), 0, True), False)
             l_d_fake.backward()
 

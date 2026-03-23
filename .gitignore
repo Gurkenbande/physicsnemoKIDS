@@ -178,3 +178,9 @@ sbatch_logs/
 wandb/
 Data/
 hrrr_mini/
+res/
+full_history.txt
+net_changes.patch
+net_changes.txt
+.git_reports/commit_change_log_full.txt
+.git_reports/commit_change_log_summary.txt

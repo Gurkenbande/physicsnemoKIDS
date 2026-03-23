@@ -55,9 +55,6 @@ def _apply_auto_paths(opt):
 
     return opt
 
-import os
-import sys
-
 def _add_physicsnemo_root():
     here = os.path.abspath(os.path.dirname(__file__))
     p = here
@@ -73,7 +70,6 @@ def _add_physicsnemo_root():
 _add_physicsnemo_root()
 
 def _add_corrdiff_root():
-    import os, sys
     here = os.path.abspath(os.path.dirname(__file__))
     p = here
     for _ in range(20):

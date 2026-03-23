@@ -1,5 +1,5 @@
 {
-  "task": "msrresnet_gan_gcn_cwb",
+  "task": "msrresnet_gan_gcn_cwb_run2_balanced",
   "model": "gan",
   "gpu_ids": [0],
 
@@ -36,8 +36,8 @@
       "ds_factor": 1,
 
       "dataloader_shuffle": true,
-      "dataloader_num_workers": 32,
-      "dataloader_batch_size": 32
+      "dataloader_num_workers": 16,
+      "dataloader_batch_size": 16
     },
 
     "test": {
@@ -56,7 +56,7 @@
       "ds_factor": 1,
 
       "dataloader_shuffle": false,
-      "dataloader_num_workers": 32,
+      "dataloader_num_workers": 16,
       "dataloader_batch_size": 1
     }
   },
@@ -94,16 +94,16 @@
     "G_lossfn_type": "l1",
     "G_lossfn_weight": 5e-2,
     "M_lossfn_weight": 1e-4,
-    "global_lossfn_weight": 1e-3,
+    "global_lossfn_weight": 5e-4,
     "F_lossfn_type": "l1",
-    "F_lossfn_weight": 1,
+    "F_lossfn_weight": 0.5,
     "F_feature_layer": 34,
     "F_weights": 1.0,
     "F_use_input_norm": true,
     "F_use_range_norm": false,
 
     "gan_type": "ragan",
-    "D_lossfn_weight": 5e-3,
+    "D_lossfn_weight": 2e-3,
 
     "E_decay": 0.999,
 
@@ -114,7 +114,7 @@
     "G_optimizer_wd": 0,
 
     "D_optimizer_type": "adam",
-    "D_optimizer_lr": 1e-5,
+    "D_optimizer_lr": 7.5e-6,
     "D_optimizer_wd": 0,
 
     "G_scheduler_type": "MultiStepLR",

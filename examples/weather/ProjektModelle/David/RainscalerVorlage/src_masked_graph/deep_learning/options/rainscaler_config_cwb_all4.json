@@ -1,6 +1,6 @@
 {
-  "task": "msrresnet_gan_gcn_cwb",
-  "model": "gan",
+  "task": "msrresnet_gan_gcn_cwb_all4_from_ch0",
+  "model": "gan_rain",
   "gpu_ids": [0],
 
   "scale": 8,
@@ -131,12 +131,31 @@
     "D_param_strict": true,
     "E_param_strict": true,
 
+    "tp_channel_idx": 0,
+    "train_only_tp_channel": false,
+    "force_single_output": false,
+    "metric_channel_idx": 0,
+    "auto_detect_rain_channel": false,
+    "epochs": 100,
+    "test_batch_size": 32,
+    "wandb_mode": "online",
     "checkpoint_test": 1,
     "checkpoint_save": 25000,
     "checkpoint_print": 1,
     "test_every_epochs": 1,
-    "manual_seed": 3407
-    ,
+    "val_log_each_sample": false,
+    "val_log_every_n": 100,
+    "manual_seed": 3407,
+    "plot_epoch_samples": true,
+    "plot_batch_internal_x": false,
+    "plot_selector_once": false,
+    "plot_selector_every_epoch": true,
+    "plot_selector_n": 50,
+    "plot_selector_cols": 10,
+    "plot_lr_channel_idx": -1,
+    "plot_cmap": "magma",
+    "plot_epoch_n": 2,
+    "plot_sample_indices": [0, 98],
     "plot_internal_x": true,
     "plot_internal_x_n": 10
   }
