@@ -42,4 +42,4 @@ The model learns to map low-resolution weather data to high-resolution outputs.
    
 
 
- ![Example Output](Bilder/plot.png)
+ ![Example Output](plot.png)
