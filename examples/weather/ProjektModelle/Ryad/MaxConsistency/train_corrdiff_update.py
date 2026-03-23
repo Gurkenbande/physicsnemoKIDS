@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, random_split
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 
 from modelupdate import Consistency
 from basis import ConsistencyLoss
@@ -20,11 +21,36 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
+
+def masked_rmse(pred, target):
+    mse = masked_mse(pred, target)
+    if mse is None:
+        return None
+    return torch.sqrt(mse)
+
+
+def masked_ensemble_crps(pred_ensemble, target):
+    
+    mask = torch.isfinite(target)
+    if mask.sum() == 0:
+        return None
+
+    target_exp = target.unsqueeze(0)
+
+    term1 = torch.abs(pred_ensemble - target_exp).mean(dim=0)
+
+    pairwise_diff = torch.abs(pred_ensemble.unsqueeze(1) - pred_ensemble.unsqueeze(0))
+    term2 = 0.5 * pairwise_diff.mean(dim=(0, 1))
+
+    crps_map = term1 - term2
+    return crps_map[mask].mean()
+
+
 def masked_mse(pred, target):
     mask = torch.isfinite(target)
     
     if mask.sum() == 0:
-        return None  # falls kompletter Batch ungültig
+        return None  
     
     diff = (pred - target) ** 2
     return diff[mask].mean()
@@ -60,21 +86,19 @@ def unpack_batch(batch, device):
 
 
 class PlotCallback(Callback):
-    def __init__(self, train_loader, val_loader, device, plot_every_n_epochs=3):
+    def __init__(self, train_loader, val_loader, device, plot_every_n_epochs=3, num_examples_per_channel=3):
         self.train_dataset = train_loader.dataset
         self.val_dataset = val_loader.dataset
         self.batch_size = train_loader.batch_size
         self.device = device
         self.plot_every_n_epochs = plot_every_n_epochs
+        self.num_examples_per_channel = num_examples_per_channel
 
     def on_validation_epoch_end(self, trainer, pl_module):
         epoch = trainer.current_epoch
-        if epoch % self.plot_every_n_epochs != 0:
-            return
-
         pl_module.eval()
 
-        # Hole normalisierungs-stats
+        
         y_mean = getattr(pl_module, 'y_mean', 0.0)
         y_std = getattr(pl_module, 'y_std', 1.0)
 
@@ -98,26 +122,37 @@ class PlotCallback(Callback):
 
         def build_channel_figure(y_true_batch, y_pred_batch, split_name: str):
             n_channels = y_true_batch.shape[1]
-            fig, axes = plt.subplots(n_channels, 3, figsize=(12, 4 * n_channels), squeeze=False)
+            n_examples = min(self.num_examples_per_channel, y_true_batch.shape[0], y_pred_batch.shape[0])
+            n_cols = 2 * n_examples
+            fig, axes = plt.subplots(
+                n_channels,
+                n_cols,
+                figsize=(4 * n_cols, 4 * n_channels),
+                squeeze=False,
+            )
 
             for ch in range(n_channels):
                 y_mean_ch, y_std_ch = get_channel_stats(ch)
 
-                y_true_np = (y_true_batch[0, ch].detach().cpu().float() * y_std_ch + y_mean_ch).numpy()
-                y_pred_np = (y_pred_batch[0, ch].detach().cpu().float() * y_std_ch + y_mean_ch).numpy()
-                y_diff_np = y_pred_np - y_true_np
+                for ex in range(n_examples):
+                    y_true_np = (y_true_batch[ex, ch].detach().cpu().float() * y_std_ch + y_mean_ch).numpy()
+                    y_pred_np = (y_pred_batch[ex, ch].detach().cpu().float() * y_std_ch + y_mean_ch).numpy()
+                    
 
-                axes[ch, 0].set_title(f"{split_name} GT ch{ch}")
-                im0 = axes[ch, 0].imshow(y_true_np)
-                fig.colorbar(im0, ax=axes[ch, 0], fraction=0.046, pad=0.04)
+                    base_col = 2 * ex
 
-                axes[ch, 1].set_title(f"{split_name} Pred ch{ch}")
-                im1 = axes[ch, 1].imshow(y_pred_np)
-                fig.colorbar(im1, ax=axes[ch, 1], fraction=0.046, pad=0.04)
+                    vmin = min(y_true_np.min(), y_pred_np.min())
+                    vmax = max(y_true_np.max(), y_pred_np.max())
 
-                axes[ch, 2].set_title(f"{split_name} Diff ch{ch}")
-                im2 = axes[ch, 2].imshow(y_diff_np)
-                fig.colorbar(im2, ax=axes[ch, 2], fraction=0.046, pad=0.04)
+                    axes[ch, base_col].set_title(f"{split_name} GT ch{ch} ex{ex}")
+                    im0 = axes[ch, base_col].imshow(y_true_np, vmin=vmin, vmax=vmax)
+                    fig.colorbar(im0, ax=axes[ch, base_col], fraction=0.046, pad=0.04)
+
+                    axes[ch, base_col + 1].set_title(f"{split_name} Pred ch{ch} ex{ex}")
+                    im1 = axes[ch, base_col + 1].imshow(y_pred_np, vmin=vmin, vmax=vmax)
+                    fig.colorbar(im1, ax=axes[ch, base_col + 1], fraction=0.046, pad=0.04)
+
+                    
 
             fig.tight_layout()
             return fig
@@ -129,7 +164,7 @@ class PlotCallback(Callback):
                     conditioning=x_tv,
                     x_image_size=448,
                     y_image_size=448,
-                    steps=20,
+                    steps=5,
                     use_ema=True,
                 )
 
@@ -145,13 +180,71 @@ class PlotCallback(Callback):
                     conditioning=x_vis,
                     x_image_size=448,
                     y_image_size=448,
-                    steps=20,
+                    steps=5,
                     use_ema=True,
                 )
 
                 fig_val = build_channel_figure(y_vis, y_pred_vis, "Val")
                 trainer.logger.experiment.log({"Val Prediction vs GT (all channels)": wandb.Image(fig_val), "epoch": epoch})
                 plt.close(fig_val)
+                fig_hist, axes_hist = plt.subplots(1, y_vis.shape[1], figsize=(5*y_vis.shape[1], 4))
+
+                for ch in range(y_vis.shape[1]):
+                    y_true_flat = y_vis[:, ch].cpu().numpy().flatten()
+                    y_pred_flat = y_pred_vis[:, ch].cpu().numpy().flatten()
+
+                    axes_hist[ch].hist(y_true_flat, bins=50, alpha=0.5, label="GT")
+                    axes_hist[ch].hist(y_pred_flat, bins=50, alpha=0.5, label="Pred")
+                    axes_hist[ch].set_title(f"Channel {ch}")
+                    axes_hist[ch].legend()
+
+                trainer.logger.experiment.log({
+                    "Histogram GT vs Pred": wandb.Image(fig_hist),
+                    "epoch": epoch
+                })
+                plt.close(fig_hist)
+
+                fig_scatter, axes_scatter = plt.subplots(1, y_vis.shape[1], figsize=(5*y_vis.shape[1], 4))
+
+                for ch in range(y_vis.shape[1]):
+                    y_true_flat = y_vis[:, ch].cpu().numpy().flatten()
+                    y_pred_flat = y_pred_vis[:, ch].cpu().numpy().flatten()
+
+                    axes_scatter[ch].scatter(y_true_flat, y_pred_flat, s=1, alpha=0.3)
+
+                    min_val = min(y_true_flat.min(), y_pred_flat.min())
+                    max_val = max(y_true_flat.max(), y_pred_flat.max())
+
+                    axes_scatter[ch].plot([min_val, max_val], [min_val, max_val], 'r--')
+                    axes_scatter[ch].set_title(f"Channel {ch}")
+
+                trainer.logger.experiment.log({
+                    "Scatter GT vs Pred": wandb.Image(fig_scatter),
+                    "epoch": epoch
+                })
+                plt.close(fig_scatter)
+
+                def compute_psd(img):
+                    fft = np.fft.fft2(img)
+                    psd = np.abs(fft) ** 2
+                    return np.mean(psd, axis=0)
+
+                fig_psd, axes_psd = plt.subplots(1, y_vis.shape[1], figsize=(5*y_vis.shape[1], 4))
+
+                for ch in range(y_vis.shape[1]):
+                    psd_true = compute_psd(y_vis[0, ch].cpu().numpy())
+                    psd_pred = compute_psd(y_pred_vis[0, ch].cpu().numpy())
+
+                    axes_psd[ch].plot(psd_true, label="GT")
+                    axes_psd[ch].plot(psd_pred, label="Pred")
+                    axes_psd[ch].set_title(f"PSD Channel {ch}")
+                    axes_psd[ch].legend()
+
+                trainer.logger.experiment.log({
+                    "Power Spectrum": wandb.Image(fig_psd),
+                    "epoch": epoch
+                })
+                plt.close(fig_psd)
             except Exception as e:
                 print(f"Val plot failed (epoch {epoch}):", e)
 
@@ -161,13 +254,15 @@ def main():
     parser.add_argument("--mode", choices=["sub", "full"], default="sub")
     parser.add_argument("--output_dir", default="/home/s458614/climate_project/outputs_corrdiff")
     parser.add_argument("--batch_size", type=int, default=2)
-    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--epochs", type=int, default=6)
     parser.add_argument("--lr", type=float, default=5e-6)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--model_channels", type=int, default=64)
     parser.add_argument("--num_steps", type=int, default=5)
     parser.add_argument("--train_ratio", type=float, default=0.9)
     parser.add_argument("--val_ratio", type=float, default=0.05)
+    parser.add_argument("--plot_examples_per_channel", type=int, default=3)
+    parser.add_argument("--crps_ensemble_size", type=int, default=4)
     args = parser.parse_args()
 
     wandb.init(
@@ -183,6 +278,8 @@ def main():
     wandb.define_metric("train_loss", step_metric="epoch")
     wandb.define_metric("val_loss", step_metric="epoch")
     wandb.define_metric("test_loss", step_metric="epoch")
+    wandb.define_metric("test_rmse", step_metric="epoch")
+    wandb.define_metric("test_crps", step_metric="epoch")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Device:", device)
@@ -246,15 +343,12 @@ def main():
 
     model = Consistency(
         config=config,
-        loss_func="MSE",
     ).to(device)
     
-    # Speichere normalisierungs-stats im Modell für Denormalisierung
-    #
     model.y_mean = wd.y_mean
     model.y_std = wd.y_std
     
-    print(f"\n✓ Normalisierungs-Stats:")
+    print(f"\n Normalisierungs-Stats:")
     if torch.is_tensor(wd.y_mean):
         y_mean_preview = [round(v, 4) for v in wd.y_mean[: min(4, wd.y_mean.numel())].tolist()]
         y_std_preview = [round(v, 4) for v in wd.y_std[: min(4, wd.y_std.numel())].tolist()]
@@ -270,7 +364,7 @@ def main():
     )
 
     plot_callback = PlotCallback(
-        train_loader, val_loader, device
+        train_loader, val_loader, device, num_examples_per_channel=args.plot_examples_per_channel
     )
 
     checkpoint_callback = ModelCheckpoint(
@@ -303,9 +397,10 @@ def main():
     model.eval()
     model = model.to(device)
     test_loss = 0.0
+    test_rmse = 0.0
+    test_crps = 0.0
     valid_test_batches = 0
 
-    print("\n📊 Evaluating on test set...")
 
     with torch.no_grad():
         for batch_idx, batch in enumerate(test_loader):
@@ -319,30 +414,58 @@ def main():
                 conditioning=x,
                 x_image_size=448,
                 y_image_size=448,
-                steps=1,
+                steps=5,
                 use_ema=True,
             )
 
             loss = masked_mse(y_pred, y)
+            rmse = masked_rmse(y_pred, y)
+
+            ensemble_preds = []
+            for _ in range(max(1, args.crps_ensemble_size)):
+                y_pred_e, _ = model.sample_conditional(
+                    conditioning=x,
+                    x_image_size=448,
+                    y_image_size=448,
+                    steps=5,
+                    use_ema=True,
+                )
+                ensemble_preds.append(y_pred_e)
+
+            crps = masked_ensemble_crps(torch.stack(ensemble_preds, dim=0), y)
 
             if loss is None or torch.isnan(loss):
                 continue
+            if rmse is None or torch.isnan(rmse):
+                continue
+            if crps is None or torch.isnan(crps):
+                continue
 
             test_loss += loss.item()
+            test_rmse += rmse.item()
+            test_crps += crps.item()
             valid_test_batches += 1
 
     if valid_test_batches > 0:
         avg_test = test_loss / valid_test_batches
+        avg_rmse = test_rmse / valid_test_batches
+        avg_crps = test_crps / valid_test_batches
     else:
         avg_test = float("nan")
+        avg_rmse = float("nan")
+        avg_crps = float("nan")
 
     wandb.log({
         "epoch": args.epochs,
-        "test_loss": avg_test
+        "test_loss": avg_test,
+        "test_rmse": avg_rmse,
+        "test_crps": avg_crps,
     })
 
-    print(f"\n✓ Training completed!")
+    print(f"\n Training completed:")
     print(f"  Test Loss: {avg_test:.6f}")
+    print(f"  Test RMSE: {avg_rmse:.6f}")
+    print(f"  Test CRPS: {avg_crps:.6f}")
     print(f"  Valid test batches: {valid_test_batches}/{len(test_loader)}")
 
     wandb.finish()
@@ -350,6 +473,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
