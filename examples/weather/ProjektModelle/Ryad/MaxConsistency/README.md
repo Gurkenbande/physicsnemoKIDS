@@ -40,4 +40,6 @@ The model learns to map low-resolution weather data to high-resolution outputs.
 8) start the training:
    python train_corrdiff_update.py --mode sub --batch_size 8 --epochs x --num_workers 16
    
- 
+
+
+ ![Example Output](Bilder/plot.png)
