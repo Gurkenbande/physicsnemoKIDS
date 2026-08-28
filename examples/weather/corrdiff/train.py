@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,8 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# DEPRECATED: this example is no longer maintained. Use the regional
+# high-resolution weather model example in examples/weather/stormcast instead.
+
 import os
 import time
+import warnings
 from contextlib import nullcontext
 
 import psutil
@@ -30,13 +34,15 @@ import nvtx
 import wandb
 
 from physicsnemo import Module
-from physicsnemo.models.diffusion import UNet, EDMPrecondSuperResolution
+from physicsnemo.models.diffusion_unets import CorrDiffRegressionUNet
+from physicsnemo.diffusion.preconditioners import EDMPrecondSuperResolution
+
 from physicsnemo.distributed import DistributedManager
-from physicsnemo.metrics.diffusion import RegressionLoss, ResidualLoss, RegressionLossCE
-from physicsnemo.utils.patching import RandomPatching2D
-from physicsnemo.launch.logging.wandb import initialize_wandb
-from physicsnemo.launch.logging import PythonLogger, RankZeroLoggingWrapper
-from physicsnemo.launch.utils import (
+from physicsnemo.diffusion.metrics import RegressionLoss, ResidualLoss, RegressionLossCE
+from physicsnemo.diffusion.multi_diffusion import RandomPatching2D
+from physicsnemo.utils.logging.wandb import initialize_wandb
+from physicsnemo.utils.logging import PythonLogger, RankZeroLoggingWrapper
+from physicsnemo.utils import (
     load_checkpoint,
     save_checkpoint,
     get_checkpoint_dir,
@@ -109,6 +115,17 @@ def profiler_emit_nvtx():
 # Train the CorrDiff model using the configurations in "conf/config_training.yaml"
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_training")
 def main(cfg: DictConfig) -> None:
+    # Default stacklevel (1) attributes the warning to __main__, otherwise Python's
+    # default filters silently drop it.
+    warnings.warn(
+        "The CorrDiff example is deprecated and is no longer maintained. Use the "
+        "regional high-resolution weather model example in examples/weather/stormcast "
+        "instead. It is a unified recipe for regional diffusion-based weather models, "
+        "and supports the downscaling setting implemented here as well as other "
+        "diffusion-based settings.",
+        DeprecationWarning,
+    )
+
     # Initialize distributed environment for training
     DistributedManager.initialize()
     dist = DistributedManager()
@@ -297,7 +314,7 @@ def main(cfg: DictConfig) -> None:
         model_args["amp_mode"] = enable_amp
 
     if cfg.model.name == "regression":
-        model = UNet(
+        model = CorrDiffRegressionUNet(
             img_in_channels=img_in_channels + model_args["N_grid_channels"],
             **model_args,
         )
@@ -305,7 +322,7 @@ def main(cfg: DictConfig) -> None:
         cfg.model.name == "lt_aware_ce_regression"
         or cfg.model.name == "lt_aware_regression"
     ):
-        model = UNet(
+        model = CorrDiffRegressionUNet(
             img_in_channels=img_in_channels
             + model_args["N_grid_channels"]
             + model_args["lead_time_channels"],

@@ -1,17 +1,12 @@
 install:
 	pip install --upgrade pip && \
 		pip install -e .
+	pip install tfrecord # Putting this here till we update the container.
 
 editable-install:
 	pip install --upgrade pip && \
 		pip install -e .[dev] --config-settings editable_mode=strict
 
-get-data:
-	test -n "$(TEST_DATA_DIR)" || { echo "Error: TEST_DATA_DIR should be set"; exit 1; }
-	mkdir -p $(TEST_DATA_DIR) && \
-	rm -rf $(TEST_DATA_DIR)/modulus-data && \
-	git clone https://gitlab-master.nvidia.com/modulus/modulus-data.git $(TEST_DATA_DIR)/modulus-data && \
-	echo "Test data has been saved in ${TEST_DATA_DIR}"
 
 setup-ci:
 	pip install pre-commit && \
@@ -28,14 +23,14 @@ lint:
 	pre-commit run markdownlint -a && \
 	pre-commit run check-added-large-files -a
 
-license: 
-	python test/ci_tests/header_check.py --all-files
+license:
+	pre-commit run license -a
 
 doctest:
 	coverage run \
 		--rcfile='test/coverage.docstring.rc' \
 		-m pytest \
-		--doctest-modules physicsnemo/ --ignore-glob=*internal* --ignore-glob=*experimental*
+		--doctest-modules physicsnemo/ --ignore-glob=*internal* --ignore-glob=*experimental* --ignore-glob=*deploy/onnx*
 
 pytest: 
 	coverage run \
@@ -49,8 +44,8 @@ pytest-internal:
 
 coverage:
 	coverage combine && \
-		coverage report --show-missing --omit=*test* --omit=*internal* --omit=*experimental* --fail-under=60 && \
-		coverage html
+		coverage report -i --show-missing --omit=*test* --omit=*internal* --omit=*experimental* --fail-under=60 && \
+		coverage html -i
 
 all-ci: get-data setup-ci black interrogate lint license install pytest doctest coverage
 
@@ -69,10 +64,10 @@ else
     $(error Unknown CPU architecture ${ARCH} detected)
 endif
 
-MODULUS_GIT_HASH = $(shell git rev-parse --short HEAD)
+PHYSICSNEMO_GIT_HASH = $(shell git rev-parse --short HEAD)
 
 container-deploy:
-	docker build -t physicsnemo:deploy --build-arg TARGETPLATFORM=${TARGETPLATFORM} --build-arg MODULUS_GIT_HASH=${MODULUS_GIT_HASH} --target deploy -f Dockerfile .
+	docker build -t physicsnemo:deploy --build-arg TARGETPLATFORM=${TARGETPLATFORM} --build-arg PHYSICSNEMO_GIT_HASH=${PHYSICSNEMO_GIT_HASH} --target deploy -f Dockerfile .
 
 container-ci:
 	docker build -t physicsnemo:ci --build-arg TARGETPLATFORM=${TARGETPLATFORM} --target ci -f Dockerfile .

@@ -3,8 +3,7 @@
 # do the coverage checks
 coverage run \
 --rcfile='coverage.pytest.rc' \
--m pytest \
---ignore=derivs_test.py
+-m pytest 
 
 coverage run \
 --rcfile='coverage.docstring.rc' \
@@ -12,10 +11,10 @@ coverage run \
 --doctest-modules ../physicsnemo/
 
 coverage combine --data-file=.coverage
-coverage report --omit=*test*
+coverage report -i --omit=*test*
 
 # if you wish to view the report in HTML format uncomment below
-# coverage html --omit=*test*
+# coverage html -i --omit=*test*
 
 # cleanup
 rm .coverage

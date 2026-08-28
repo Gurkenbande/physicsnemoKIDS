@@ -1,5 +1,5 @@
 # © Copyright 2023 HP Development Company, L.P.
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -51,20 +51,12 @@ from utils import (
 )
 
 from physicsnemo.distributed.manager import DistributedManager
-from physicsnemo.launch.logging import (
+from physicsnemo.utils.logging import (
     LaunchLogger,
     PythonLogger,
     RankZeroLoggingWrapper,
 )
-from physicsnemo.models.vfgn.graph_network_modules import LearnedSimulator
-
-physical_devices = tf.config.list_physical_devices("GPU")
-try:
-    for device_ in physical_devices:
-        tf.config.experimental.set_memory_growth(device_, True)
-except:
-    # Invalid device or cannot modify virtual devices once initialized.
-    pass
+from physicsnemo.models.vfgn.graph_network_modules import VFGNLearnedSimulator
 
 
 def Train(rank_zero_logger, dist, cfg: DictConfig):
@@ -119,7 +111,7 @@ def Train(rank_zero_logger, dist, cfg: DictConfig):
         "velocity": velocity_stats,
         "context": context_stats,
     }
-    model = LearnedSimulator(
+    model = VFGNLearnedSimulator(
         num_dimensions=metadata["dim"] * cfg.train_options.pred_len,
         num_seq=cfg.train_options.input_seq_len,
         boundaries=torch.DoubleTensor(metadata["bounds"]),
@@ -131,6 +123,7 @@ def Train(rank_zero_logger, dist, cfg: DictConfig):
     writer = SummaryWriter(log_dir=cfg.data_options.ckpt_path_vfgn)
 
     optimizer = None
+    scaler = None
     # todo : check device
     device = "cpu"
     step = 0
@@ -178,18 +171,23 @@ def Train(rank_zero_logger, dist, cfg: DictConfig):
 
         sampled_noise *= noise_mask
 
-        pred_target = model(
-            next_positions=targets.to(device),
-            position_sequence=inputs.to(device),
-            position_sequence_noise=sampled_noise.to(device),
-            n_particles_per_example=features["n_particles_per_example"].to(device),
-            n_edges_per_example=features["n_edges_per_example"].to(device),
-            senders=features["senders"].to(device),
-            receivers=features["receivers"].to(device),
-            predict_length=cfg.train_options.pred_len,
-            particle_types=features["particle_type"].to(device),
-            global_context=features.get("step_context").to(device),
-        )
+        amp_enabled = cfg.general.fp16 and scaler is not None
+        with torch.autocast(
+            device_type=device.type if isinstance(device, torch.device) else "cpu",
+            enabled=amp_enabled,
+        ):
+            pred_target = model(
+                next_positions=targets.to(device),
+                position_sequence=inputs.to(device),
+                position_sequence_noise=sampled_noise.to(device),
+                n_particles_per_example=features["n_particles_per_example"].to(device),
+                n_edges_per_example=features["n_edges_per_example"].to(device),
+                senders=features["senders"].to(device),
+                receivers=features["receivers"].to(device),
+                predict_length=cfg.train_options.pred_len,
+                particle_types=features["particle_type"].to(device),
+                global_context=features.get("step_context").to(device),
+            )
 
         if optimizer is None:
             # first data need to inference the feature size
@@ -208,14 +206,7 @@ def Train(rank_zero_logger, dist, cfg: DictConfig):
             model = model.to(device)
             optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
             if cfg.general.fp16:
-                # double check if amp installed
-                try:
-                    from apex import amp
-
-                    model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
-                except ImportError as e:
-                    print("Apex package not available -> ", e)
-                    exit()
+                scaler = torch.amp.GradScaler(device.type)
 
             scheduler = torch.optim.lr_scheduler.ExponentialLR(
                 optimizer, gamma=0.1, verbose=True
@@ -394,11 +385,12 @@ def Train(rank_zero_logger, dist, cfg: DictConfig):
         # back propogation
         optimizer.zero_grad()
         if cfg.general.fp16:
-            with amp.scale_loss(loss, optimizer) as scaled_loss:
-                scaled_loss.backward()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
         else:
             loss.backward()
-        optimizer.step()
+            optimizer.step()
 
         running_loss += loss.item()
 
@@ -523,7 +515,7 @@ def Test(rank_zero_logger, dist, cfg):
         "context": context_stats,
     }
 
-    model = LearnedSimulator(
+    model = VFGNLearnedSimulator(
         num_dimensions=metadata["dim"] * cfg.train_options.pred_len,
         num_seq=cfg.train_options.input_seq_len,
         boundaries=torch.DoubleTensor(metadata["bounds"]),

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -26,7 +26,7 @@ from .losses import (
 )
 from .mhd_pde import MHD_PDE
 from .loss_mhd import LossMHD
-from physicsnemo.models.layers.spectral_layers import fourier_derivatives
+from physicsnemo.nn.module.spectral_layers import fourier_derivatives
 
 
 class LossMHDVecPot_PhysicsNeMo(LossMHD):
@@ -87,7 +87,7 @@ class LossMHDVecPot_PhysicsNeMo(LossMHD):
         self.DA_weight = DA_weight
         # Define 2D MHD PDEs
         self.mhd_pde_eq = MHD_PDE(self.nu, self.eta, self.rho0)
-        self.mhd_pde_node = self.mhd_pde_eq.make_nodes()
+        self.mhd_pde_node = self.mhd_pde_eq.make_computations()
 
     def compute_loss(self, pred, true, inputs):
         "Compute weighted loss"

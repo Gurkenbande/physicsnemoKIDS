@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,25 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hydra
+import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from omegaconf import DictConfig
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LinearLR
-from tqdm import trange
-import numpy as np
-import time, os
+from utils import DDPMLinearNoiseScheduler, load_data_classifier
 
-
-import hydra
-from hydra.utils import to_absolute_path
-from omegaconf import DictConfig
-
-from physicsnemo.models.topodiff import Diffusion
 from physicsnemo.models.topodiff import UNetEncoder
-from physicsnemo.launch.logging import PythonLogger
-from physicsnemo.launch.logging.wandb import initialize_wandb
-from utils import load_data_topodiff, load_data_classifier
+from physicsnemo.utils.logging import PythonLogger
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -45,11 +37,11 @@ def main(cfg: DictConfig) -> None:
     train_img = 2 * train_img - 1
     valid_img = 2 * valid_img - 1
 
-    device = torch.device("cuda:1")
+    device = torch.device("cuda:0")
 
     classifier = UNetEncoder(in_channels=1, out_channels=2).to(device)
 
-    diffusion = Diffusion(n_steps=cfg.diffusion_steps, device=device)
+    noise_scheduler = DDPMLinearNoiseScheduler(n_steps=cfg.diffusion_steps)
 
     batch_size = cfg.batch_size
 
@@ -69,8 +61,8 @@ def main(cfg: DictConfig) -> None:
         batch = torch.tensor(train_img[idx]).float().unsqueeze(1).to(device) * 2 - 1
         batch_labels = torch.tensor(train_labels[idx]).long().to(device)
 
-        t = torch.randint(0, cfg.diffusion_steps, (batch.shape[0],)).to(device)
-        batch = diffusion.q_sample(batch, t)
+        t = noise_scheduler.sample_time(batch.shape[0], device=device)
+        batch = noise_scheduler.add_noise(batch, t)
         logits = classifier(batch, time_steps=t)
 
         loss = F.cross_entropy(logits, batch_labels)
@@ -88,8 +80,8 @@ def main(cfg: DictConfig) -> None:
                 batch_labels = torch.tensor(valid_labels[idx]).long().to(device)
 
                 # Sample diffusion steps and get noised images
-                t = torch.randint(0, cfg.diffusion_steps, (batch.shape[0],)).to(device)
-                batch = diffusion.q_sample(batch, t)
+                t = noise_scheduler.sample_time(batch.shape[0], device=device)
+                batch = noise_scheduler.add_noise(batch, t)
 
                 # Forward pass
                 logits = classifier(batch, time_steps=t)

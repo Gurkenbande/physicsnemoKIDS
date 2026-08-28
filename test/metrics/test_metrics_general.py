@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -25,7 +25,9 @@ import physicsnemo.metrics.general.crps as crps
 import physicsnemo.metrics.general.ensemble_metrics as em
 import physicsnemo.metrics.general.entropy as ent
 import physicsnemo.metrics.general.histogram as hist
+import physicsnemo.metrics.general.mse as mse_mod
 import physicsnemo.metrics.general.power_spectrum as ps
+import physicsnemo.metrics.general.relative_error as rel
 import physicsnemo.metrics.general.wasserstein as w
 from physicsnemo.distributed.manager import DistributedManager
 
@@ -64,16 +66,8 @@ def get_disagreements(inputs, bins, counts, test):
         print("True counts", trueh)
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 @pytest.mark.parametrize("input_shape", [(1, 72, 144)])
 def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
-    DistributedManager._shared_state = {}
-    if (device == "cuda:0") and (not DistributedManager.is_initialized()):
-        os.environ["MASTER_ADDR"] = "localhost"
-        os.environ["MASTER_PORT"] = "12345"
-        os.environ["RANK"] = "0"
-        os.environ["WORLD_SIZE"] = "1"
-        DistributedManager.initialize()
     x = torch.randn([10, *input_shape], device=device)
     y = torch.randn([5, *input_shape], device=device)
 
@@ -83,12 +77,14 @@ def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
     lin = hist.linspace(start, end, 10)
     assert lin.shape[0] == 11
     l_np = np.linspace(start.cpu(), end.cpu(), 11)
-    assert torch.allclose(
-        lin,
-        torch.from_numpy(l_np).to(device),
-        rtol=rtol,
-        atol=atol,
-    )
+    # Here, l_np is a *torch tensor* which is weird design from numpy.
+    # Since torch implements an array interface, numpy will dispatch
+    # the torch operations.  So... that's baffling.
+    if isinstance(l_np, np.ndarray):
+        l_np = torch.from_numpy(l_np).to(device)
+    else:
+        l_np = l_np.to(device)
+    assert torch.allclose(lin, l_np, rtol=rtol, atol=atol)
 
     # Test histogram correctness
     xx = x[:, 0, 0, 0]
@@ -223,26 +219,18 @@ def test_histogram(device, input_shape, rtol: float = 1e-3, atol: float = 1e-3):
         rtol=rtol,
         atol=atol,
     )
-    if device == "cuda:0":
-        DistributedManager.cleanup()
-        del os.environ["RANK"]
-        del os.environ["WORLD_SIZE"]
-        del os.environ["MASTER_ADDR"]
-        del os.environ["MASTER_PORT"]
 
 
 def fair_crps(pred, obs, dim=-1):
     return crps.kcrps(pred, obs, dim=dim, biased=False)
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_fair_crps_greater_than_zero(device):
     pred = torch.randn(5, 10, device=device)
     obs = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0], device=device)
     assert torch.all(fair_crps(pred, obs, dim=-1) > 0)
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_fair_crps_is_fair(device):
     # fair means that a random prediction should outperform a non-random one on average
     # This is not always true of ``crps``...try replacing fair_crps function
@@ -257,7 +245,6 @@ def test_fair_crps_is_fair(device):
     assert score_of_random.item() < score_of_cheating.item()
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_fair_crps_converges_to_crps(device):
     # for large ensemble fair cprs should be close to crps
 
@@ -278,7 +265,6 @@ def test_fair_crps_converges_to_crps(device):
     assert pytest.approx(fair_value, rel=1e-3) == expected
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_fair_crps_dim_arg_works(device):
     pred = torch.randn((5, 10, 100), device=device)
 
@@ -291,7 +277,6 @@ def test_fair_crps_dim_arg_works(device):
     assert value.shape == (b, c)
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 @pytest.mark.parametrize("num", [10, 23, 59])
 @pytest.mark.parametrize("biased", [True, False])
 def test_crps_finite(device, num, biased):
@@ -355,7 +340,6 @@ def test_crps_finite(device, num, biased):
     assert torch.all(torch.isclose(analytic, crps.kcrps(pred, obs, biased=True)))
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     # Uses eq (5) from Gneiting et al. https://doi.org/10.1175/MWR2904.1
     # crps(N(0, 1), 0.0) = 2 / sqrt(2*pi) - 1/sqrt(pi) ~= 0.23...
@@ -541,7 +525,6 @@ def test_crps(device, rtol: float = 1e-3, atol: float = 1e-3):
     assert c.shape == z.shape
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 @pytest.mark.parametrize("mean", [3.0])
 @pytest.mark.parametrize("variance", [0.1])
 def test_wasserstein(device, mean, variance, rtol: float = 1e-3, atol: float = 1e-3):
@@ -611,8 +594,10 @@ def test_wasserstein(device, mean, variance, rtol: float = 1e-3, atol: float = 1
     assert not torch.any(torch.isnan(w_mnorm))
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA required for this test.")
+
     DistributedManager._shared_state = {}
     if (device == "cuda:0") and (not DistributedManager.is_initialized()):
         os.environ["MASTER_ADDR"] = "localhost"
@@ -713,7 +698,6 @@ def test_means_var(device, rtol: float = 1e-3, atol: float = 1e-3):
         del os.environ["MASTER_PORT"]
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_calibration(device, rtol: float = 1e-2, atol: float = 1e-2):
     x = torch.randn((10_000, 30, 30), device=device, dtype=torch.float32)
     y = torch.randn((30, 30), device=device, dtype=torch.float32)
@@ -783,7 +767,6 @@ def test_calibration(device, rtol: float = 1e-2, atol: float = 1e-2):
     )
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
     one = torch.ones([1], device=device, dtype=torch.float32)
 
@@ -851,7 +834,6 @@ def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
         )
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_power_spectrum(device):
     # Test the 2D power spectrum routine for correctness using a sine wave
     h, w = 32, 32
@@ -873,3 +855,137 @@ def test_power_spectrum(device):
     assert (power[0, 0] < 1e-6).sum() > (
         power[0, 0].numel() * 0.9
     )  # Most bins are zero
+
+
+# ---------------------------------------------------------------------------
+# Relative errors (relative_error.py)
+# ---------------------------------------------------------------------------
+def test_relative_error_known_values(device):
+    target = torch.randn(8, 5, device=device)
+    # Perfect prediction -> 0.
+    assert torch.allclose(
+        rel.relative_l2(target, target), torch.zeros((), device=device), atol=1e-6
+    )
+    assert torch.allclose(
+        rel.relative_mse(target, target), torch.zeros((), device=device), atol=1e-6
+    )
+    # Zero prediction -> sum(target^2) / sum(target^2) == 1 (and its sqrt == 1).
+    zeros = torch.zeros_like(target)
+    assert torch.allclose(
+        rel.relative_l2(zeros, target), torch.ones((), device=device), atol=1e-6
+    )
+    assert torch.allclose(
+        rel.relative_mse(zeros, target), torch.ones((), device=device), atol=1e-6
+    )
+
+
+def test_relative_error_matches_manual(device):
+    torch.manual_seed(0)
+    pred = torch.randn(4, 6, device=device)
+    target = torch.randn(4, 6, device=device)
+    man_mse = ((pred - target) ** 2).sum() / (target**2).sum()
+    torch.testing.assert_close(rel.relative_mse(pred, target), man_mse)
+    torch.testing.assert_close(rel.relative_l2(pred, target), man_mse.sqrt())
+
+
+def test_relative_l2_is_sqrt_of_relative_mse(device):
+    torch.manual_seed(1)
+    pred = torch.randn(3, 7, device=device)
+    target = torch.randn(3, 7, device=device)
+    torch.testing.assert_close(
+        rel.relative_l2(pred, target), rel.relative_mse(pred, target).sqrt()
+    )
+
+
+def test_relative_l2_dim_per_channel(device):
+    torch.manual_seed(2)
+    pred = torch.randn(10, 3, device=device)
+    target = torch.randn(10, 3, device=device)
+    # Reduce the point axis only -> per-channel result of shape (3,).
+    out = rel.relative_l2(pred, target, dim=0)
+    assert out.shape == (3,)
+    man = (((pred - target) ** 2).sum(0) / (target**2).sum(0)).sqrt()
+    torch.testing.assert_close(out, man)
+
+
+def test_relative_l2_weights_mask(device):
+    torch.manual_seed(3)
+    pred = torch.randn(12, 4, device=device)
+    target = torch.randn(12, 4, device=device)
+    # All-ones weights == unweighted.
+    torch.testing.assert_close(
+        rel.relative_l2(pred, target, weights=torch.ones_like(pred)),
+        rel.relative_l2(pred, target),
+    )
+    # A 0/1 mask must equal computing the ratio over the kept elements only.
+    mask = (torch.rand(12, 1, device=device) > 0.5).to(pred.dtype)
+    ratio = (mask * (pred - target) ** 2).sum() / (mask * target**2).sum()
+    torch.testing.assert_close(rel.relative_mse(pred, target, weights=mask), ratio)
+    torch.testing.assert_close(
+        rel.relative_l2(pred, target, weights=mask), ratio.sqrt()
+    )
+
+
+def test_relative_error_shape_mismatch_raises(device):
+    a, b = torch.randn(4, 3, device=device), torch.randn(4, 5, device=device)
+    with pytest.raises(ValueError, match="same shape"):
+        rel.relative_l2(a, b)
+    with pytest.raises(ValueError, match="same shape"):
+        rel.relative_mse(a, b)
+
+
+# ---------------------------------------------------------------------------
+# Weighted MSE / RMSE (mse.py)
+# ---------------------------------------------------------------------------
+def test_mse_weights_none_unchanged(device):
+    # weights=None must reproduce the plain mean exactly (no downstream change).
+    torch.manual_seed(4)
+    pred = torch.randn(6, 5, device=device)
+    target = torch.randn(6, 5, device=device)
+    torch.testing.assert_close(
+        mse_mod.mse(pred, target), torch.mean((pred - target) ** 2)
+    )
+    # All-ones weights == unweighted mean.
+    torch.testing.assert_close(
+        mse_mod.mse(pred, target, weights=torch.ones_like(pred)),
+        mse_mod.mse(pred, target),
+    )
+
+
+def test_mse_weights_mask_matches_manual(device):
+    torch.manual_seed(5)
+    pred = torch.randn(10, 4, device=device)
+    target = torch.randn(10, 4, device=device)
+    mask = (torch.rand(10, 1, device=device) > 0.5).to(pred.dtype)
+    w = torch.broadcast_to(mask, pred.shape)
+    man = (w * (pred - target) ** 2).sum() / w.sum()
+    torch.testing.assert_close(mse_mod.mse(pred, target, weights=mask), man)
+    # rmse inherits the weighting.
+    torch.testing.assert_close(mse_mod.rmse(pred, target, weights=mask), man.sqrt())
+
+
+def test_mse_rmse_unweighted_and_dim(device):
+    torch.manual_seed(6)
+    pred = torch.randn(3, 8, device=device)
+    target = torch.randn(3, 8, device=device)
+    se = (pred - target) ** 2
+    torch.testing.assert_close(mse_mod.mse(pred, target), se.mean())
+    torch.testing.assert_close(mse_mod.rmse(pred, target), se.mean().sqrt())
+    # dim reduction matches a plain mean over that axis.
+    torch.testing.assert_close(mse_mod.mse(pred, target, dim=1), se.mean(dim=1))
+    torch.testing.assert_close(mse_mod.rmse(pred, target, dim=1), se.mean(dim=1).sqrt())
+
+
+def test_mse_weights_channel_and_eps(device):
+    torch.manual_seed(7)
+    pred = torch.randn(2, 9, 4, device=device)
+    target = torch.randn(2, 9, 4, device=device)
+    # Per-channel weights broadcast over (B, N): a genuine weighted mean — unlike
+    # the relative ratio, channel weights do NOT cancel here.
+    cw = torch.rand(4, device=device) + 0.5
+    w = torch.broadcast_to(cw, pred.shape)
+    man = (w * (pred - target) ** 2).sum() / w.sum()
+    torch.testing.assert_close(mse_mod.mse(pred, target, weights=cw), man)
+    # All-zero weights -> finite 0 via the eps floor (no division by zero).
+    out = mse_mod.mse(pred, target, weights=torch.zeros_like(pred))
+    assert torch.isfinite(out) and float(out) == 0.0

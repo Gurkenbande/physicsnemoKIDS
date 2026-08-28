@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -21,7 +21,6 @@ from typing import Sequence
 import numpy as np
 import pytest
 import torch
-from pytest_utils import import_or_fail
 
 from physicsnemo.metrics.climate.healpix_loss import (
     BaseMSE,
@@ -29,8 +28,7 @@ from physicsnemo.metrics.climate.healpix_loss import (
     WeightedMSE,
     WeightedOceanMSE,
 )
-
-xr = pytest.importorskip("xarray")
+from test.conftest import requires_module
 
 
 @pytest.fixture
@@ -61,7 +59,6 @@ class trainer_helper:
     device: str
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_BaseMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     mse_func = BaseMSE()
     mse_func.setup(None)  # for coverage
@@ -132,7 +129,6 @@ def test_BaseMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     )
 
 
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_WeightedMSE(device, test_data, rtol: float = 1e-3, atol: float = 1e-3):
     num_channels = 3
     channels, pred_tensor_np, targ_tensor_np = test_data(channels=num_channels)
@@ -236,8 +232,7 @@ def dataset_name():
     return name
 
 
-@import_or_fail("xarray")
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+@requires_module("xarray")
 def test_OceanMSE(
     data_dir,
     dataset_name,
@@ -247,6 +242,7 @@ def test_OceanMSE(
     rtol: float = 1e-3,
     atol: float = 1e-3,
 ):
+    xr = pytest.importorskip("xarray")
     num_channels = 3
     channels, pred_tensor_np, targ_tensor_np = test_data(
         channels=num_channels, img_shape=(32, 32)
@@ -315,8 +311,7 @@ def test_OceanMSE(
     )
 
 
-@import_or_fail("xarray")
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+@requires_module("xarray")
 def test_WeightedOceanMSE(
     data_dir,
     dataset_name,
@@ -326,6 +321,7 @@ def test_WeightedOceanMSE(
     rtol: float = 1e-3,
     atol: float = 1e-3,
 ):
+    xr = pytest.importorskip("xarray")
     num_channels = 3
     identity_weights = [1, 1, 1]  # same as OceanMSE
     test_weights = [2.0, 0.5, 1]  # Check positive and negative weighing factors

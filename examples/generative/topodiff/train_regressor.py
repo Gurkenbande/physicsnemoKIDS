@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,24 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hydra
+import numpy as np
 import torch
 import torch.nn as nn
+from omegaconf import DictConfig
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LinearLR
-from tqdm import trange
-import numpy as np
-import time, os
+from utils import DDPMLinearNoiseScheduler, load_data_regressor
 
-
-import hydra
-from hydra.utils import to_absolute_path
-from omegaconf import DictConfig
-
-from physicsnemo.models.topodiff import Diffusion
 from physicsnemo.models.topodiff import UNetEncoder
-from physicsnemo.launch.logging import PythonLogger
-from physicsnemo.launch.logging.wandb import initialize_wandb
-from utils import load_data_topodiff, load_data_regressor
+from physicsnemo.utils.logging import PythonLogger
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -58,7 +51,7 @@ def main(cfg: DictConfig) -> None:
     in_channels = 6
     regressor = UNetEncoder(in_channels=in_channels, out_channels=1).to(device)
 
-    diffusion = Diffusion(n_steps=cfg.diffusion_steps, device=device)
+    noise_scheduler = DDPMLinearNoiseScheduler(n_steps=cfg.diffusion_steps)
 
     batch_size = cfg.batch_size
     """
@@ -89,8 +82,8 @@ def main(cfg: DictConfig) -> None:
 
         batch_labels = torch.tensor(labels[idx]).float().to(device).unsqueeze(1)
 
-        t = torch.randint(0, cfg.diffusion_steps, (batch.shape[0],)).to(device)
-        batch = diffusion.q_sample(batch, t)
+        t = noise_scheduler.sample_time(batch.shape[0], device=device)
+        batch = noise_scheduler.add_noise(batch, t)
 
         batch = torch.cat((batch, batch_pf, batch_load), dim=1)
 

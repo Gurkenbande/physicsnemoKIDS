@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,148 +14,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ruff: noqa: E402
-import os
-import sys
 
-script_path = os.path.abspath(__file__)
-sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
-
-import common
-import numpy as np
 import pytest
 import torch
-from pytest_utils import import_or_fail
+
+from test import common
+from test.nn.module.healpix_helpers import MulX
 
 
-class MulX(torch.nn.Module):
-    """Helper class that just multiplies the values of an input tensor"""
+class KwargCapture(torch.nn.Module):
+    """Helper layer that records the kwargs it was instantiated with, so
+    tests can verify which kwargs HEALPixLayer strips before forwarding."""
 
-    def __init__(self, multiplier: int = 1):
-        super(MulX, self).__init__()
-        self.multiplier = multiplier
+    captured_kwargs = None
+
+    def __init__(self, **kwargs):
+        super().__init__()
+        KwargCapture.captured_kwargs = kwargs
 
     def forward(self, x):
-        return x * self.multiplier
-
-
-@import_or_fail("hydra")
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixFoldFaces_initialization(device, pytestconfig):
-    from physicsnemo.models.dlwp_healpix_layers import (
-        HEALPixFoldFaces,
-    )
-
-    fold_func = HEALPixFoldFaces()
-    assert isinstance(fold_func, HEALPixFoldFaces)
-
-
-@import_or_fail("hydra")
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixFoldFaces_forward(device, pytestconfig):
-    from physicsnemo.models.dlwp_healpix_layers import (
-        HEALPixFoldFaces,
-    )
-
-    fold_func = HEALPixFoldFaces()
-
-    tensor_size = torch.randint(low=2, high=4, size=(5,)).tolist()
-    output_size = (tensor_size[0] * tensor_size[1], *tensor_size[2:])
-    invar = torch.ones(*tensor_size, device=device)
-
-    outvar = fold_func(invar)
-    assert outvar.shape == output_size
-
-    fold_func = HEALPixFoldFaces(enable_nhwc=True)
-    assert fold_func(invar).shape == outvar.shape
-    assert fold_func(invar).stride() != outvar.stride()
-
-
-@import_or_fail("hydra")
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixUnfoldFaces_initialization(device, pytestconfig):
-    from physicsnemo.models.dlwp_healpix_layers import (
-        HEALPixUnfoldFaces,
-    )
-
-    unfold_func = HEALPixUnfoldFaces()
-    assert isinstance(unfold_func, HEALPixUnfoldFaces)
-
-
-@import_or_fail("hydra")
-@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixUnfoldFaces_forward(device, pytestconfig):
-    from physicsnemo.models.dlwp_healpix_layers import (
-        HEALPixUnfoldFaces,
-    )
-
-    num_faces = 12
-    unfold_func = HEALPixUnfoldFaces()
-
-    tensor_size = torch.randint(low=1, high=4, size=(4,)).tolist()
-    output_size = (tensor_size[0], num_faces, *tensor_size[1:])
-
-    # first dim is B * num_faces
-    tensor_size[0] *= num_faces
-    invar = torch.ones(*tensor_size, device=device)
-
-    outvar = unfold_func(invar)
-    assert outvar.shape == output_size
-
-
-HEALPixPadding_testdata = [
-    ("cuda:0", 2),
-    ("cuda:0", 3),
-    ("cuda:0", 4),
-    ("cpu", 2),
-    ("cpu", 3),
-    ("cpu", 4),
-]
-
-
-@import_or_fail("hydra")
-@pytest.mark.parametrize("device,padding", HEALPixPadding_testdata)
-def test_HEALPixPadding_initialization(device, padding, pytestconfig):
-    from physicsnemo.models.dlwp_healpix_layers import (
-        HEALPixPadding,
-    )
-
-    pad_func = HEALPixPadding(padding)
-    assert isinstance(pad_func, HEALPixPadding)
-
-
-@import_or_fail("hydra")
-@pytest.mark.parametrize("device,padding", HEALPixPadding_testdata)
-def test_HEALPixPadding_forward(device, padding, pytestconfig):
-    from physicsnemo.models.dlwp_healpix_layers import (
-        HEALPixPadding,
-    )
-
-    num_faces = 12  # standard for healpix
-    batch_size = 2
-    pad_func = HEALPixPadding(padding)
-
-    # test invalid padding size
-    with pytest.raises(
-        ValueError, match=("invalid value for 'padding', expected int > 0 but got 0")
-    ):
-        pad_func = HEALPixPadding(0)
-
-    hw_size = torch.randint(low=4, high=24, size=(1,)).tolist()
-    c_size = torch.randint(low=3, high=7, size=(1,)).tolist()
-    hw_size = np.asarray(hw_size + hw_size)
-
-    # dims are B * F, C, H, W
-    # F = 12, and H == W
-    # HEALPixPadding expects a folded tensor so fold dims here
-    tensor_size = (batch_size * num_faces, *c_size, *hw_size)
-    invar = torch.rand(tensor_size, device=device)
-
-    # Healpix adds the padding size to each side
-    hw_padded_size = hw_size + (2 * padding)
-    out_size = (batch_size * num_faces, *c_size, *hw_padded_size)
-
-    outvar = pad_func(invar)
-    assert outvar.shape == out_size
+        return x
 
 
 HEALPixLayer_testdata = [
@@ -168,10 +46,9 @@ HEALPixLayer_testdata = [
 ]
 
 
-@import_or_fail("hydra")
-@pytest.mark.parametrize("device,multiplier", HEALPixLayer_testdata)
+@pytest.mark.parametrize("multiplier", [2, 3, 4])
 def test_HEALPixLayer_initialization(device, multiplier, pytestconfig):
-    from physicsnemo.models.dlwp_healpix_layers import (
+    from physicsnemo.nn.module.hpx import (
         HEALPixLayer,
     )
 
@@ -179,10 +56,9 @@ def test_HEALPixLayer_initialization(device, multiplier, pytestconfig):
     assert isinstance(layer, HEALPixLayer)
 
 
-@import_or_fail("hydra")
-@pytest.mark.parametrize("device,multiplier", HEALPixLayer_testdata)
+@pytest.mark.parametrize("multiplier", [2, 3, 4])
 def test_HEALPixLayer_forward(device, multiplier, pytestconfig):
-    from physicsnemo.models.dlwp_healpix_layers import (
+    from physicsnemo.nn.module.hpx import (
         HEALPixLayer,
     )
 
@@ -219,3 +95,83 @@ def test_HEALPixLayer_forward(device, multiplier, pytestconfig):
 
     del layer, outvar, invar
     torch.cuda.empty_cache()
+
+
+def test_HEALPixLayer_strips_wrapper_kwargs(device, pytestconfig):
+    """`enable_nhwc` and `enable_healpixpad` are HEALPixLayer-only knobs and
+    must not be forwarded to the wrapped layer's constructor."""
+    from physicsnemo.nn.module.hpx import HEALPixLayer
+
+    HEALPixLayer(
+        layer=KwargCapture,
+        multiplier=5,
+        enable_nhwc=False,
+        enable_healpixpad=False,
+    )
+
+    assert "enable_nhwc" not in KwargCapture.captured_kwargs
+    assert "enable_healpixpad" not in KwargCapture.captured_kwargs
+    assert KwargCapture.captured_kwargs == {"multiplier": 5}
+
+
+def test_HEALPixLayer_no_padding_when_kernel_size_small(device, pytestconfig):
+    """A conv layer with kernel_size == 1 has no spatial neighborhood to
+    stitch, so HEALPixLayer must not insert a HEALPixPadding submodule."""
+    from physicsnemo.nn.module.hpx import HEALPixLayer
+    from physicsnemo.nn.module.hpx.padding import HEALPixPadding
+
+    in_channels = 4
+    out_channels = 3
+    kernel_size = 1
+
+    layer = HEALPixLayer(
+        layer=torch.nn.Conv2d,
+        in_channels=in_channels,
+        out_channels=out_channels,
+        kernel_size=kernel_size,
+        device=device,
+    )
+
+    assert not any(isinstance(m, HEALPixPadding) for m in layer.layers)
+
+    size = 4
+    invar = torch.rand(24, in_channels, size, size, device=device)
+    outvar = layer(invar)
+
+    assert outvar.shape == (24, out_channels, size, size)
+
+
+def test_HEALPixLayer_conv_disables_native_padding(device, pytestconfig):
+    """When HEALPixLayer inserts its own HEALPixPadding submodule for a
+    kernel_size > 1 conv, the wrapped Conv2d's native padding must be
+    disabled (0) since padding is already applied upstream."""
+    from physicsnemo.nn.module.hpx import HEALPixLayer
+    from physicsnemo.nn.module.hpx.padding import HEALPixPadding
+
+    kernel_size = 3
+    in_channels = 4
+    out_channels = 3
+
+    layer = HEALPixLayer(
+        layer=torch.nn.Conv2d,
+        in_channels=in_channels,
+        out_channels=out_channels,
+        kernel_size=kernel_size,
+        device=device,
+    )
+
+    conv_submodules = [m for m in layer.layers if isinstance(m, torch.nn.Conv2d)]
+    padding_submodules = [m for m in layer.layers if isinstance(m, HEALPixPadding)]
+
+    assert len(conv_submodules) == 1
+    assert len(padding_submodules) == 1
+    assert conv_submodules[0].padding == (0, 0)
+
+    # kernel_size=3 with dilation=1 needs 1 pixel of context on each side.
+    assert padding_submodules[0].p == 1
+
+    size = 4
+    invar = torch.rand(24, in_channels, size, size, device=device)
+    outvar = layer(invar)
+    # HEALPixPadding restores the spatial size that Conv2d's kernel consumes.
+    assert outvar.shape == (24, out_channels, size, size)

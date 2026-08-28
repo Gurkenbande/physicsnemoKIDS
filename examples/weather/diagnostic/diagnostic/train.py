@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,20 +15,14 @@
 # limitations under the License.
 
 from typing import Callable, Iterable, Sequence, Type, Union
-import warnings
 
 import torch
 from torch import Tensor
 
-try:
-    from apex.optimizers import FusedAdam
-except ImportError:
-    warnings.warn("Apex is not installed, defaulting to PyTorch optimizers.")
-
 from physicsnemo import Module
 from physicsnemo.distributed import DistributedManager
-from physicsnemo.launch.logging import LaunchLogger, PythonLogger
-from physicsnemo.launch.utils import load_checkpoint, save_checkpoint
+from physicsnemo.utils.logging import LaunchLogger, PythonLogger
+from physicsnemo.utils import load_checkpoint, save_checkpoint
 from physicsnemo.utils import StaticCaptureTraining, StaticCaptureEvaluateNoGrad
 
 
@@ -178,10 +172,8 @@ class Trainer:
             opt_kwargs.update(opt_params)
 
         if opt_cls is None:
-            try:
-                opt_cls = FusedAdam
-            except NameError:  # in case we don't have apex
-                opt_cls = torch.optim.AdamW
+            opt_cls = torch.optim.AdamW
+            opt_kwargs.setdefault("fused", torch.cuda.is_available())
 
         return opt_cls(self.model.parameters(), **opt_kwargs)
 

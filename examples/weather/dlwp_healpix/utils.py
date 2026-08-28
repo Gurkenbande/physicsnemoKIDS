@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -97,7 +97,7 @@ def write_checkpoint(
     ckpt_paths = np.array(glob.glob(root_path + "/training-state-epoch-*.mdlus"))
     if len(ckpt_paths) > keep_n_checkpoints + 1:
         worst_path = ""
-        worst_error = -np.infty
+        worst_error = -np.inf
         for ckpt_path in ckpt_paths:
             if "NAN" in ckpt_path:
                 os.remove(ckpt_path)

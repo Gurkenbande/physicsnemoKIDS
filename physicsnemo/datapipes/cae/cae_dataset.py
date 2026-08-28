@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
 import json
 import pathlib
 import time
@@ -23,25 +24,17 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import torch
 import torch.distributed as dist
-import zarr
 from torch.distributed.tensor import Replicate, Shard
 
-try:
-    import tensorstore as ts
-
-    TENSORSTORE_AVAILABLE = True
-except ImportError:
-    TENSORSTORE_AVAILABLE = False
-
-try:
-    import pyvista as pv
-
-    PV_AVAILABLE = True
-except ImportError:
-    PV_AVAILABLE = False
-
-from physicsnemo.distributed import ShardTensor, ShardTensorSpec
+from physicsnemo.core.version_check import OptionalImport, check_version_spec
+from physicsnemo.datapipes._indexing import _cyclic_block_indices
 from physicsnemo.distributed.utils import compute_split_shapes
+from physicsnemo.domain_parallel import ShardTensor, ShardTensorSpec
+
+zarr = OptionalImport("zarr")
+
+TENSORSTORE_AVAILABLE = check_version_spec("tensorstore", hard_fail=False)
+PV_AVAILABLE = check_version_spec("pyvista", hard_fail=False)
 
 # Abstractions:
 # - want to read npy/npz/.zarr/.stl/.vtp files
@@ -161,7 +154,7 @@ class BackendReader(ABC):
         """
         Set the volume sampling size.  When set, the readers will
         assume the volumetric data is shuffled on disk and read only
-        contiguous chunks of the data up to the sampling size.
+        cyclic contiguous blocks of the data up to the sampling size.
 
 
         Args:
@@ -175,26 +168,31 @@ class BackendReader(ABC):
         slice_start: int,
         slice_stop: int,
         n_points: int,
-    ) -> slice:
+    ) -> np.ndarray:
         """
 
-        select the contiguous chunks of the volume data to read.
+        Select a cyclic contiguous block of volume data to read.
 
         Args:
-            n_volume_points: The number of points to sample from the volume.
+            slice_start: First index in the available range.
+            slice_stop: Exclusive end of the available range.
+            n_points: The number of points to sample from the volume.
 
         Returns:
-            A tuple of the start and stop indices of the contiguous chunks.
+            Indices containing one or two contiguous runs.
         """
 
-        if slice_stop - slice_start < n_points:
+        total = slice_stop - slice_start
+        if total < n_points:
             raise ValueError(
-                f"Slice size {slice_stop - slice_start} is less than the number of points {n_points}"
+                f"Slice size {total} is less than the number of points {n_points}"
             )
 
-        # Choose a random start point that will fit the entire n_points region:
-        start = np.random.randint(slice_start, slice_stop - n_points)
-        return slice(start, start + n_points)
+        # Keep this legacy reader on NumPy's RNG while sharing the unbiased
+        # cyclic indexing rule with the current readers.
+        start = None if n_points in (0, total) else int(np.random.randint(total))
+        indices = _cyclic_block_indices(total, n_points, start=start).numpy()
+        return indices + slice_start
 
 
 class NpyFileReader(BackendReader):
@@ -234,6 +232,7 @@ class NpyFileReader(BackendReader):
     def read_file_sharded(
         self, filename: pathlib.Path, device_mesh: torch.distributed.DeviceMesh
     ) -> dict[str, ShardTensor]:
+        """Read an NPY file into sharded tensors (not implemented)."""
         pass
 
     def set_volume_sampling_size(self, volume_sampling_size: int):
@@ -303,6 +302,7 @@ class NpzFileReader(BackendReader):
     def read_file_sharded(
         self, filename: pathlib.Path, device_mesh: torch.distributed.DeviceMesh
     ) -> dict[str, ShardTensor]:
+        """Read an NPZ file into sharded tensors (not implemented)."""
         pass
 
     def set_volume_sampling_size(self, volume_sampling_size: int):
@@ -470,6 +470,7 @@ class ZarrFileReader(BackendReader):
 
 
 if PV_AVAILABLE:
+    pv = importlib.import_module("pyvista")
 
     class VTKFileReader(BackendReader):
         """
@@ -600,9 +601,22 @@ if PV_AVAILABLE:
             raise NotImplementedError(
                 "volume sampling directly from disk is not supported for vtk files."
             )
+else:
+
+    class VTKFileReader(BackendReader):
+        """
+        Dummy reader for vtk files.
+        """
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError(
+                "CAE Dataset: VTKFileReader is not available without pyvista.\n"
+                "Please see https://docs.pyvista.org/getting-started/installation.html for installation instructions."
+            )
 
 
 if TENSORSTORE_AVAILABLE:
+    ts = importlib.import_module("tensorstore")
 
     class TensorStoreZarrReader(BackendReader):
         """
@@ -647,19 +661,26 @@ if TENSORSTORE_AVAILABLE:
 
             keys = store.list().result()
 
+            def to_tensor_dict(attributes_dict):
+                attributes = {}
+                for k, v in attributes_dict.items():
+                    try:
+                        attributes[k] = torch.tensor(v)
+                    except (TypeError, ValueError, RuntimeError):  # noqa PERF203
+                        pass
+                return attributes
+
             # Zarr 3 check:
             if b"/zarr.json" in keys:
                 zarr_json = store.read(b"/zarr.json").result()
                 # load into json's parser:
                 attributes_dict = json.loads(zarr_json.value)["attributes"]
-                attributes = {k: torch.tensor(v) for k, v in attributes_dict.items()}
-                return attributes
+                return to_tensor_dict(attributes_dict)
             elif b"/.zattrs" in keys:
                 # Zarr 2:
                 zarr_attrs = store.read(b"/.zattrs").result()
                 attributes_dict = json.loads(zarr_attrs.value)
-                attributes = {k: torch.tensor(v) for k, v in attributes_dict.items()}
-                return attributes
+                return to_tensor_dict(attributes_dict)
             else:
                 return {}
 
@@ -949,6 +970,7 @@ class CAEDataset:
         self.indices = indices
 
     def idx_to_index(self, idx):
+        """Map a dataset position through the optional epoch index list."""
         if hasattr(self, "indices"):
             return self.indices[idx]
 

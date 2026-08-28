@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -35,6 +35,33 @@ from torch.utils.tensorboard import SummaryWriter
 from physicsnemo.distributed import DistributedManager
 
 logger = logging.getLogger("lmgn")
+
+
+def _redact_config_value(value: Any, key: str | None = None) -> Any:
+    """Return a logging-safe copy of a configuration value."""
+    normalized_key = key.lower() if key is not None else ""
+    if normalized_key in {
+        "key",
+        "password",
+        "secret",
+        "token",
+    } or normalized_key.endswith(("_key", "_password", "_secret", "_token")):
+        return "<redacted>"
+    if isinstance(value, Mapping):
+        return {
+            child_key: _redact_config_value(child_value, str(child_key))
+            for child_key, child_value in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_config_value(child_value) for child_value in value]
+    return value
+
+
+def config_summary(config: DictConfig) -> str:
+    """Serialize a config for logging without exposing credential-like values."""
+    container = OmegaConf.to_container(config, resolve=False)
+    redacted = _redact_config_value(container)
+    return OmegaConf.to_yaml(OmegaConf.create(redacted), sort_keys=True)
 
 
 class TermColorFormatter(logging.Formatter):
@@ -191,14 +218,14 @@ class WandBLogger(ExperimentLogger):
         if DistributedManager().rank != 0:
             return
 
-        if wandb_key := kwargs.pop("wandb_key", None) is not None:
+        if (wandb_key := kwargs.pop("wandb_key", None)) is not None:
             logger.warning("Passing W&B key via config is not recommended.")
             wandb.login(key=wandb_key)
 
         # If wandb_id is not provided to resume the experiment,
         # create new id if wandb_id.txt does not exist,
         # otherwise - load id from the file.
-        if wandb_id := kwargs.pop("id", None) is None:
+        if (wandb_id := kwargs.pop("id", None)) is None:
             wandb_id_file = os.path.join(kwargs["dir"], "wandb_id.txt")
             if not os.path.exists(wandb_id_file):
                 wandb_id = wandb.util.generate_id()

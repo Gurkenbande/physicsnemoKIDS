@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -28,19 +28,14 @@ from torch.utils.data.distributed import DistributedSampler
 from torch_geometric.loader import DataLoader as PyGDataLoader
 
 
-try:
-    import apex
-except:
-    pass
-
 from physicsnemo.datapipes.gnn.stokes_dataset import StokesDataset
 from physicsnemo.distributed.manager import DistributedManager
-from physicsnemo.launch.logging import (
+from physicsnemo.utils.logging import (
     PythonLogger,
     RankZeroLoggingWrapper,
 )
-from physicsnemo.launch.logging.wandb import initialize_wandb
-from physicsnemo.launch.utils import load_checkpoint, save_checkpoint
+from physicsnemo.utils.logging.wandb import initialize_wandb
+from physicsnemo.utils import load_checkpoint, save_checkpoint
 from physicsnemo.models.meshgraphnet import MeshGraphNet
 
 from utils import relative_lp_error
@@ -105,7 +100,7 @@ class MGNTrainer:
             hidden_dim_node_decoder=cfg.hidden_dim_node_decoder,
         )
         if cfg.jit:
-            self.model = torch.jit.script(self.model).to(dist.device)
+            self.model = torch.compile(self.model.to(dist.device))
         else:
             self.model = self.model.to(dist.device)
 
@@ -124,13 +119,12 @@ class MGNTrainer:
 
         # instantiate loss, optimizer, and scheduler
         self.criterion = torch.nn.MSELoss()
-        try:
-            self.optimizer = apex.optimizers.FusedAdam(
-                self.model.parameters(), lr=cfg.lr
-            )
-            rank_zero_logger.info("Using FusedAdam optimizer")
-        except:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg.lr)
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(),
+            lr=cfg.lr,
+            fused=torch.cuda.is_available(),
+        )
+        rank_zero_logger.info(f"Using {self.optimizer.__class__.__name__} optimizer")
         # If lr_decay_rate is not set, calculate it based on the number of epochs
         # and the final learning rate multiplier.
         lr_decay_rate = cfg.lr_decay_rate

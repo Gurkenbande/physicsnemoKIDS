@@ -80,11 +80,13 @@ command line or in the config file.
 
 ## Getting Started
 
-This example requires the `tensorflow` library to load the data in the `.tfrecord`
-format. Install with:
+This example uses the lightweight `tfrecord` package to load the data in the `.tfrecord`
+format.
+
+Install the requirements using:
 
 ```bash
-pip install "tensorflow<=2.17.1"
+pip install -r requirements.txt
 ```
 
 To download the data from DeepMind's repo, run:
@@ -126,9 +128,8 @@ set `loggers.wandb.mode` to `online` in the command line:
 python train.py +experiment=water data.data_dir=/data/Water loggers.wandb.mode=online
 ```
 
-An active Weights & Biases account is required. You will also need to set your
-API key either through the command line option `loggers.wandb.wandb_key`
-or by using the `WANDB_API_KEY` environment variable:
+An active Weights & Biases account is required. Set your API key using the
+`WANDB_API_KEY` environment variable:
 
 ```bash
 export WANDB_API_KEY=key

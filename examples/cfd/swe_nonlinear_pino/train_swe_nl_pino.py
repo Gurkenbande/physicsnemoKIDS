@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -26,8 +26,8 @@ from torch.utils.data import DataLoader
 import torch.nn.functional as F
 
 from physicsnemo.models.fno import FNO
-from physicsnemo.launch.logging import LaunchLogger
-from physicsnemo.launch.utils.checkpoint import save_checkpoint
+from physicsnemo.utils.logging import LaunchLogger
+from physicsnemo.utils.checkpoint import save_checkpoint
 
 from train_utils.datasets import DataLoader2D_swe
 from swe_nl_pde import SWE_NL
@@ -76,7 +76,7 @@ def test_step(model, dataloader, log, cfg, swe_nl_node, device, option):
             pred_y = out.reshape(y.shape)
 
             if cfg.loss.derivative == "original":
-                loss_pde = PINO_loss_swe_nonlin(
+                loss_pde = pino_loss_swe_nonlin(
                     out,
                     g=cfg.data.g,
                     nu=cfg.data.nu,
@@ -156,6 +156,7 @@ def test_step(model, dataloader, log, cfg, swe_nl_node, device, option):
 
 @hydra.main(version_base="1.3", config_path=".", config_name="config_pino.yaml")
 def main(cfg: DictConfig):
+    """Main function"""
     # CUDA support
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -166,7 +167,7 @@ def main(cfg: DictConfig):
 
     # Define 2D Nonlinear Shallow Waters PDEs
     swe_nl = SWE_NL(g=cfg.data.g, nu=cfg.data.nu)
-    swe_nl_node = swe_nl.make_nodes()
+    swe_nl_node = swe_nl.make_computations()
 
     # Load in dataset and make dataloader
     data = torch.load(

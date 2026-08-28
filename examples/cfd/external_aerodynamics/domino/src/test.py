@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -57,10 +57,9 @@ from physicsnemo.distributed import DistributedManager
 from physicsnemo.datapipes.cae.domino_datapipe import DoMINODataPipe
 from physicsnemo.models.domino.model import DoMINO
 from physicsnemo.models.domino.geometry_rep import scale_sdf
-from physicsnemo.utils.domino.utils import *
-from physicsnemo.utils.domino.vtk_file_utils import *
-from physicsnemo.utils.sdf import signed_distance_field
-from physicsnemo.utils.neighbors import knn
+from physicsnemo.models.domino.utils import *
+from physicsnemo.models.domino.utils.vtk_file_utils import *
+from physicsnemo.nn.functional import knn, signed_distance_field
 from utils import ScalingFactors, load_scaling_factors
 
 # AIR_DENSITY = 1.205
@@ -479,7 +478,7 @@ def main(cfg: DictConfig):
 
         # SDF calculation on the grid using WARP
         time_start = time.time()
-        sdf_surf_grid, _ = signed_distance_field(
+        sdf_surf_grid, _, _ = signed_distance_field(
             normed_stl_vertices_cp,
             mesh_indices_flattened,
             surf_grid_normed,
@@ -671,7 +670,7 @@ def main(cfg: DictConfig):
 
             # SDF calculation on the grid using WARP
             time_start = time.time()
-            sdf_grid, _ = signed_distance_field(
+            sdf_grid, _, _ = signed_distance_field(
                 normed_stl_vertices_vol,
                 mesh_indices_flattened,
                 grid,
@@ -680,7 +679,7 @@ def main(cfg: DictConfig):
 
             # SDF calculation
             time_start = time.time()
-            sdf_nodes, sdf_node_closest_point = signed_distance_field(
+            sdf_nodes, sdf_node_closest_point, _ = signed_distance_field(
                 normed_stl_vertices_vol,
                 mesh_indices_flattened,
                 volume_coordinates,

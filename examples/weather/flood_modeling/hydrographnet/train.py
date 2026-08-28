@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -33,9 +33,9 @@ from torch.utils.data.distributed import DistributedSampler
 
 from physicsnemo.datapipes.gnn.hydrographnet_dataset import HydroGraphDataset
 from physicsnemo.distributed.manager import DistributedManager
-from physicsnemo.launch.logging import PythonLogger, RankZeroLoggingWrapper
-from physicsnemo.launch.logging.wandb import initialize_wandb
-from physicsnemo.launch.utils import load_checkpoint, save_checkpoint
+from physicsnemo.utils.logging import PythonLogger, RankZeroLoggingWrapper
+from physicsnemo.utils.logging.wandb import initialize_wandb
+from physicsnemo.utils import load_checkpoint, save_checkpoint
 from physicsnemo.models.meshgraphnet.meshgraphkan import MeshGraphKAN
 from utils import compute_physics_loss
 
@@ -122,7 +122,7 @@ class MGNTrainer:
         if cfg.jit:
             if not self.model.meta.jit:
                 raise ValueError("MeshGraphKAN is not yet JIT-compatible.")
-            self.model = torch.jit.script(self.model).to(self.dist.device)
+            self.model = torch.compile(self.model).to(self.dist.device)
         else:
             self.model = self.model.to(self.dist.device)
         rank_zero_logger.info("Model instantiated successfully.")
@@ -142,20 +142,11 @@ class MGNTrainer:
 
         self.model.train()
         self.criterion = nn.MSELoss()
-        try:
-            if cfg.use_apex:
-                from apex.optimizers import FusedAdam
-
-                self.optimizer = FusedAdam(self.model.parameters(), lr=cfg.lr)
-            else:
-                self.optimizer = None
-        except ImportError:
-            rank_zero_logger.warning(
-                "NVIDIA Apex is not installed; FusedAdam optimizer will not be used."
-            )
-            self.optimizer = None
-        if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=cfg.lr)
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(),
+            lr=cfg.lr,
+            fused=torch.cuda.is_available(),
+        )
         rank_zero_logger.info(f"Using optimizer: {self.optimizer.__class__.__name__}")
 
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(

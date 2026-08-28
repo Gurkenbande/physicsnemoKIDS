@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,22 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.cd ..
 
+import hydra
 import torch
+from omegaconf import DictConfig
 from torch.optim import AdamW
 from tqdm import trange
-import numpy as np
-import time, os
+from utils import DDPMLinearNoiseScheduler, load_data, load_data_topodiff
 
-
-import hydra
-from hydra.utils import to_absolute_path
-from omegaconf import DictConfig
-
-from physicsnemo.models.topodiff import TopoDiff, Diffusion
-from physicsnemo.models.topodiff import UNetEncoder
-from physicsnemo.launch.logging import PythonLogger
-from physicsnemo.launch.logging.wandb import initialize_wandb
-from utils import load_data_topodiff, load_data
+from physicsnemo.diffusion.metrics.losses import MSEDSMLoss
+from physicsnemo.models.topodiff import TopoDiff
+from physicsnemo.utils.logging import PythonLogger
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -39,7 +33,18 @@ def main(cfg: DictConfig) -> None:
 
     device = torch.device("cuda:0")
     model = TopoDiff(64, 6, 1, model_channels=128, attn_resolutions=[16, 8]).to(device)
-    diffusion = Diffusion(n_steps=1000, device=device)
+    scheduler = DDPMLinearNoiseScheduler(n_steps=1000)
+
+    # Adapt TopoDiff to DiffusionModel protocol (epsilon-predictor)
+    def diffusion_model(x, t, condition=None, **kwargs):
+        return model(x, condition, t.long())
+
+    loss_fn = MSEDSMLoss(
+        model=diffusion_model,
+        noise_scheduler=scheduler,
+        prediction_type="epsilon",
+        epsilon_to_x0_fn=scheduler.epsilon_to_x0,
+    )
 
     topologies = load_data(
         cfg.path_training_data_diffusion, cfg.prefix_topology_file, ".png", 0, 30000
@@ -72,7 +77,7 @@ def main(cfg: DictConfig) -> None:
         tops = tops.float().to(device)
         cons = cons.float().to(device)
 
-        losses = diffusion.train_loss(model, tops, cons)
+        losses = loss_fn(x0=tops, condition=cons)
 
         optimizer.zero_grad()
         losses.backward()

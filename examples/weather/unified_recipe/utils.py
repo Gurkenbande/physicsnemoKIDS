@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -17,9 +17,8 @@
 # Utils for unified training recipe
 
 import os
+
 import fsspec
-import zarr
-import numpy as np
 
 
 def get_filesystem(
@@ -49,7 +48,7 @@ def get_filesystem(
     """
 
     if type == "file":
-        fs = fsspec.filesystem("file")
+        fs = fsspec.filesystem("file", auto_mkdir=True)
     elif type == "s3":
         fs = fsspec.filesystem(
             "s3",

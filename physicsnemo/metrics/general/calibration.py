@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -84,7 +84,7 @@ def find_rank(
 def _rank_probability_score_from_counts(
     rank_bin_edges: Tensor, rank_counts: Tensor
 ) -> Tensor:
-    """Finds the rank of the observation with respect to the given counts and bins.
+    r"""Finds the rank of the observation with respect to the given counts and bins.
 
     Computes
 
@@ -116,7 +116,7 @@ def _rank_probability_score_from_counts(
 
 
 def rank_probability_score(ranks: Tensor) -> Tensor:
-    """
+    r"""
     Computes the Rank Probability Score for the passed ranks.
     Internally, this creates a histogram for the ranks and computes the
     Rank Probability Score (RPS) using the histogram.

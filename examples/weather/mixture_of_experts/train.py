@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -27,10 +27,10 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.amp import GradScaler, autocast
 
 from physicsnemo.distributed import DistributedManager
-from physicsnemo.launch.logging import PythonLogger, RankZeroLoggingWrapper
-from physicsnemo.launch.logging import LaunchLogger
-from physicsnemo.launch.logging.wandb import initialize_wandb
-from physicsnemo.launch.utils import (
+from physicsnemo.utils.logging import PythonLogger, RankZeroLoggingWrapper
+from physicsnemo.utils.logging import LaunchLogger
+from physicsnemo.utils.logging.wandb import initialize_wandb
+from physicsnemo.utils import (
     load_checkpoint,
     save_checkpoint,
     get_checkpoint_dir,
@@ -181,27 +181,17 @@ def main(cfg: DictConfig) -> None:
         f"Loaded validation datapipe of size {len(validation_datapipe)} for rank {dist.rank}"
     )
 
-    # Create optimizer
-    optimizer_class = None
-    if torch.cuda.is_available():
-        try:
-            optimizer_class = getattr(
-                importlib.import_module("apex.optimizers"), "FusedAdam"
-            )
-            rank_zero_logger.info("Using FusedAdam optimizer")
-            use_FusedAdam = True
-        except ImportError:
-            pass
-    if optimizer_class is None:
-        optimizer_class = torch.optim.AdamW
-        rank_zero_logger.info("Using AdamW optimizer")
-        use_FusedAdam = False
-    optimizer = optimizer_class(
+    # Create optimizer. Use the native PyTorch fused AdamW kernel when on
+    # CUDA (functionally equivalent to apex.optimizers.FusedAdam).
+    use_fused = torch.cuda.is_available()
+    optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=cfg.training.lr,
         betas=(0.9, 0.999),
         weight_decay=cfg.training.weight_decay,
+        fused=use_fused,
     )
+    rank_zero_logger.info(f"Using AdamW optimizer (fused={use_fused})")
 
     # Learning rate scheduler
     scheduler = CosineAnnealingLR(

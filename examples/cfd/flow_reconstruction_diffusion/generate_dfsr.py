@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -29,7 +29,7 @@ from omegaconf import DictConfig
 from utils import StackedRandomGenerator, open_url
 
 from physicsnemo.distributed import DistributedManager
-from physicsnemo.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from physicsnemo.utils.logging import PythonLogger, RankZeroLoggingWrapper
 from utils import EasyDict, construct_class_by_name
 import copy
 import logging
@@ -492,7 +492,7 @@ def load_flow_data(path, stat_path=None):
 def load_recons_data(ref_path, sample_path, data_kw, smoothing, smoothing_scale):
     """Loads recons data"""
     print("Loading low-res input data from: ", sample_path)
-    with np.load(sample_path, allow_pickle=True) as f:
+    with np.load(sample_path, allow_pickle=False) as f:
         sampled_data = f[data_kw][-4:, ...].copy().astype(np.float32)
     sampled_data = torch.as_tensor(sampled_data, dtype=torch.float32)
     print("Loading high-res reference data from: ", ref_path)
@@ -771,10 +771,10 @@ def main(cfg: DictConfig) -> None:
     loss_kwargs = EasyDict()
     if cfg.precond == "dfsr":
         network_kwargs.class_name = "physicsnemo.models.diffusion.VEPrecond_dfsr"
-        loss_kwargs.class_name = "physicsnemo.metrics.diffusion.VELoss_dfsr"
+        loss_kwargs.class_name = "physicsnemo.diffusion.metrics.VELoss_dfsr"
     elif cfg.precond == "dfsr_cond":
         network_kwargs.class_name = "physicsnemo.models.diffusion.VEPrecond_dfsr_cond"
-        loss_kwargs.class_name = "physicsnemo.metrics.diffusion.VELoss_dfsr_cond"
+        loss_kwargs.class_name = "physicsnemo.diffusion.metrics.VELoss_dfsr_cond"
     loss_fn = construct_class_by_name(**loss_kwargs)  # training.loss.(VP|VE|EDM)Loss
 
     # Network options.
